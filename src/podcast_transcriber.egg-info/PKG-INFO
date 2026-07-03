@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: podcast-transcriber
+Version: 0.1.0
+Summary: Podcast transcription CLI with speaker diarization using WhisperX
+Requires-Python: <3.13,>=3.11
+Requires-Dist: whisperx>=3.1.1
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: rich>=13.7.0
