@@ -1,7 +1,0 @@
-{
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
-    "sonarlint.connectedMode.project": {
-        "connectionId": "gryphus-lab",
-        "projectKey": "gryphus-lab_podcast-transcriber"
-    }
-}
