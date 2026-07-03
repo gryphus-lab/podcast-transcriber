@@ -1,14 +1,30 @@
 """Main entry point for the podcast transcriber CLI."""
 
-import argparse
-import sys
-from pathlib import Path
+# Suppress noisy warnings BEFORE importing anything that triggers them
+import logging
+import os
+import warnings
 
-from rich.console import Console
+os.environ["PYTHONWARNINGS"] = "ignore"
+warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", message=".*torchcodec.*")
+warnings.filterwarnings("ignore", message=".*Lightning automatically upgraded.*")
+warnings.filterwarnings("ignore", category=UserWarning)
+logging.getLogger("lightning.pytorch.utilities.migration").setLevel(logging.ERROR)
+logging.getLogger("lightning").setLevel(logging.ERROR)
+logging.getLogger("whisperx").setLevel(logging.ERROR)
+logging.getLogger("pyannote").setLevel(logging.ERROR)
+logging.getLogger("pyannote.audio").setLevel(logging.ERROR)
 
-from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL
-from .utils.formatter import format_transcript, write_transcript
-from .utils.transcriber import transcribe_audio
+import argparse  # noqa: E402, I001
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from rich.console import Console  # noqa: E402
+
+from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL  # noqa: E402
+from .utils.transcriber import transcribe_audio  # noqa: E402
+from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 
 console = Console()
 
