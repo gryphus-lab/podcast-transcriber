@@ -1,2 +1,0 @@
-[console_scripts]
-transcribe = podcast_transcriber.__main__:main
