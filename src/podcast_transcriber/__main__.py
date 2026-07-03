@@ -129,15 +129,15 @@ def main() -> int:
     console.print()
 
     try:
-        # Transcribe
-        with console.status("[bold green]Transcribing audio..."):
-            result = transcribe_audio(
-                audio_path=args.audio_file,
-                model_name=args.model,
-                language=args.language,
-                diarize=diarize,
-                hf_token=args.hf_token,
-            )
+        # Transcribe (no spinner - allows Ctrl-C to work properly)
+        console.print("[bold green]Transcribing audio...[/bold green]")
+        result = transcribe_audio(
+            audio_path=args.audio_file,
+            model_name=args.model,
+            language=args.language,
+            diarize=diarize,
+            hf_token=args.hf_token,
+        )
 
         # Format and write output
         transcript = format_transcript(result, output_format=args.format)
@@ -152,6 +152,10 @@ def main() -> int:
 
         console.print(f"\n[green]Done![/green] Transcript saved to: {output_path}")
         return 0
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted.[/yellow] Exiting.")
+        return 130
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] {e}")
