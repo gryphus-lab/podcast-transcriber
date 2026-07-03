@@ -7,8 +7,8 @@ from pathlib import Path
 from rich.console import Console
 
 from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL
-from .utils.formatter import format_transcript, write_transcript
 from .utils.transcriber import transcribe_audio
+from .utils.formatter import format_transcript, write_transcript
 
 console = Console()
 
@@ -104,7 +104,7 @@ def main() -> int:
 
     diarize = args.diarize and not args.no_diarize
 
-    console.print("\n[bold]Podcast Transcriber[/bold]")
+    console.print(f"\n[bold]Podcast Transcriber[/bold]")
     console.print(f"  Audio:    {args.audio_file}")
     console.print(f"  Model:    {args.model}")
     console.print(f"  Language: {args.language}")

@@ -1,0 +1,4 @@
+include .env.example
+include README.md
+include CLAUDE.md
+recursive-include src *.py
