@@ -128,8 +128,18 @@ mise run transcribe -- my_podcast.m4a --format srt
 
 ```json
 [
-  {"start": 0.0, "end": 3.5, "text": "Hello and welcome.", "speaker": "SPEAKER_00"},
-  {"start": 3.5, "end": 6.2, "text": "Thanks for having me.", "speaker": "SPEAKER_01"}
+  {
+    "start": 0.0,
+    "end": 3.5,
+    "text": "Hello and welcome.",
+    "speaker": "SPEAKER_00"
+  },
+  {
+    "start": 3.5,
+    "end": 6.2,
+    "text": "Thanks for having me.",
+    "speaker": "SPEAKER_01"
+  }
 ]
 ```
 
@@ -137,12 +147,12 @@ mise run transcribe -- my_podcast.m4a --format srt
 
 All settings can be configured via `.env` or CLI arguments (CLI takes precedence):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HF_TOKEN` | (empty) | HuggingFace token for diarization |
-| `WHISPER_MODEL` | `large-v3` | Model size |
-| `LANGUAGE` | `en` | Language code |
-| `OUTPUT_DIR` | `output` | Transcript output directory |
+| Variable        | Default    | Description                       |
+| --------------- | ---------- | --------------------------------- |
+| `HF_TOKEN`      | (empty)    | HuggingFace token for diarization |
+| `WHISPER_MODEL` | `large-v3` | Model size                        |
+| `LANGUAGE`      | `en`       | Language code                     |
+| `OUTPUT_DIR`    | `output`   | Transcript output directory       |
 
 ## Troubleshooting
 
@@ -164,6 +174,7 @@ brew install ffmpeg
 ### HuggingFace model access denied
 
 You must accept the model terms:
+
 1. Go to https://huggingface.co/pyannote/speaker-diarization-3.1
 2. Accept the user agreement
 3. Ensure your token has `read` access
