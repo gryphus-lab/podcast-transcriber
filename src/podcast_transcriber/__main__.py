@@ -1,14 +1,19 @@
 """Main entry point for the podcast transcriber CLI."""
 
-import argparse
-import sys
-from pathlib import Path
+# Suppress noisy warnings BEFORE importing anything that triggers them
+from .utils.warnings_filter import suppress_noisy_output
 
-from rich.console import Console
+suppress_noisy_output()
 
-from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL
-from .utils.formatter import format_transcript, write_transcript
-from .utils.transcriber import transcribe_audio
+import argparse  # noqa: E402, I001
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from rich.console import Console  # noqa: E402
+
+from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL  # noqa: E402
+from .utils.transcriber import transcribe_audio  # noqa: E402
+from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 
 console = Console()
 
@@ -113,15 +118,15 @@ def main() -> int:
     console.print()
 
     try:
-        # Transcribe
-        with console.status("[bold green]Transcribing audio..."):
-            result = transcribe_audio(
-                audio_path=args.audio_file,
-                model_name=args.model,
-                language=args.language,
-                diarize=diarize,
-                hf_token=args.hf_token,
-            )
+        # Transcribe (no spinner - allows Ctrl-C to work properly)
+        console.print("[bold green]Transcribing audio...[/bold green]")
+        result = transcribe_audio(
+            audio_path=args.audio_file,
+            model_name=args.model,
+            language=args.language,
+            diarize=diarize,
+            hf_token=args.hf_token,
+        )
 
         # Format and write output
         transcript = format_transcript(result, output_format=args.format)
@@ -136,6 +141,10 @@ def main() -> int:
 
         console.print(f"\n[green]Done![/green] Transcript saved to: {output_path}")
         return 0
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted.[/yellow] Exiting.")
+        return 130
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] {e}")

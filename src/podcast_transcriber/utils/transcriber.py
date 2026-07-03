@@ -1,19 +1,8 @@
 """Audio transcription using WhisperX with optional speaker diarization."""
 
-import logging
-import warnings
 from pathlib import Path
 
-# Suppress noisy warnings from torchcodec/pyannote/lightning/whisperx
-warnings.filterwarnings("ignore", message=".*torchcodec.*")
-warnings.filterwarnings("ignore", message=".*Lightning automatically upgraded.*")
-logging.getLogger("lightning.pytorch.utilities.migration").setLevel(logging.ERROR)
-logging.getLogger("whisperx").setLevel(logging.ERROR)
-logging.getLogger("pyannote").setLevel(logging.ERROR)
-logging.getLogger("whisperx.vads.pyannote").setLevel(logging.ERROR)
-
 import torch  # noqa: E402
-import torchaudio  # noqa: E402
 import whisperx  # noqa: E402
 
 
@@ -88,11 +77,12 @@ def transcribe_audio(
 
         # Load audio as in-memory waveform to bypass torchcodec issues.
         # pyannote accepts {"waveform": Tensor, "sample_rate": int}.
-        waveform, sample_rate = torchaudio.load(str(audio_path))
+        # Use the whisperx-loaded numpy audio (already decoded) converted to tensor,
+        # since torchaudio may lack the backend for .m4a on some setups.
 
-        # pyannote expects mono or will take first channel
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+        # whisperx.load_audio returns float32 numpy at 16kHz mono
+        waveform = torch.from_numpy(audio).unsqueeze(0)  # (1, samples)
+        sample_rate = 16000
 
         diarize_segments = diarize_pipeline(
             {"waveform": waveform, "sample_rate": sample_rate}

@@ -2,7 +2,7 @@
 name = "podcast-transcriber"
 version = "0.1.0"
 description = "Podcast transcription CLI with speaker diarization using WhisperX"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 dependencies = [
     "whisperx>=3.1.1",
     "python-dotenv>=1.0.0",
