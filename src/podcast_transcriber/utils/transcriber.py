@@ -2,11 +2,6 @@
 
 from pathlib import Path
 
-# Suppress noisy warnings from torchcodec/pyannote/lightning/whisperx
-from .warnings_filter import suppress_noisy_output
-
-suppress_noisy_output()
-
 import torch  # noqa: E402
 import whisperx  # noqa: E402
 
