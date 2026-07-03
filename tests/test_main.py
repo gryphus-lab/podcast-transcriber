@@ -26,17 +26,17 @@ class TestWarningAndLoggingSuppression:
             assert logging.getLogger(name).level == logging.ERROR
 
 
-def _make_args(**overrides) -> argparse.Namespace:
-    defaults = dict(
-        audio_file=Path("podcast.m4a"),
-        model="large-v3",
-        language="en",
-        diarize=True,
-        no_diarize=False,
-        hf_token="hf_test_token",
-        output_dir=Path("output"),
-        format="txt",
-    )
+def _make_args(**overrides: object) -> argparse.Namespace:
+    defaults = {
+        "audio_file": Path("podcast.m4a"),
+        "model": "large-v3",
+        "language": "en",
+        "diarize": True,
+        "no_diarize": False,
+        "hf_token": "hf_test_token",
+        "output_dir": Path("output"),
+        "format": "txt",
+    }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
 
