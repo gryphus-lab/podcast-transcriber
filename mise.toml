@@ -1,0 +1,49 @@
+[tools]
+python = "3.11"
+uv = 'latest'
+prettier = 'latest'
+
+# Automatic virtual environment
+[env]
+_.python.venv = { path = ".venv", create = true }
+PROJECT_NAME = "{{ config_root | basename }}"
+VIRTUAL_ENV = "{{ config_root }}/.venv"
+PATH = "{{ config_root }}/.venv/bin:{{env.PATH}}"
+
+[settings]
+activate_aggressive = true
+
+[tasks.info]
+description = "Print project information"
+run = '''
+echo "Project: $PROJECT_NAME"
+echo "Python: $(python --version)"
+'''
+
+[tasks.lint]
+description = "Lint and check formatting with Ruff and Prettier"
+run = "uv run ruff check . && uv run ruff format --check . && prettier --check ."
+
+[tasks.format]
+description = "Format and fix code with Ruff and Prettier"
+run = "uv run ruff format . && uv run ruff check --fix . && prettier --write ."
+
+[tasks.install]
+description = "Install dependencies using uv"
+run = "uv sync"
+
+[tasks.transcribe]
+description = "Transcribe an audio file"
+run = "uv run transcribe {args}"
+
+[tasks.add]
+description = "Add a new dependency"
+run = "uv add {args}"
+
+[tasks.update]
+description = "Update dependencies"
+run = "uv sync --upgrade"
+
+[tasks.test]
+description = "Run tests"
+run = "uv run pytest"
