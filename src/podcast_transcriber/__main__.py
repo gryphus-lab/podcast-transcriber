@@ -1,20 +1,9 @@
 """Main entry point for the podcast transcriber CLI."""
 
 # Suppress noisy warnings BEFORE importing anything that triggers them
-import logging
-import os
-import warnings
+from .utils.warnings_filter import suppress_noisy_output
 
-os.environ["PYTHONWARNINGS"] = "ignore"
-warnings.filterwarnings("ignore")
-warnings.filterwarnings("ignore", message=".*torchcodec.*")
-warnings.filterwarnings("ignore", message=".*Lightning automatically upgraded.*")
-warnings.filterwarnings("ignore", category=UserWarning)
-logging.getLogger("lightning.pytorch.utilities.migration").setLevel(logging.ERROR)
-logging.getLogger("lightning").setLevel(logging.ERROR)
-logging.getLogger("whisperx").setLevel(logging.ERROR)
-logging.getLogger("pyannote").setLevel(logging.ERROR)
-logging.getLogger("pyannote.audio").setLevel(logging.ERROR)
+suppress_noisy_output()
 
 import argparse  # noqa: E402, I001
 import sys  # noqa: E402
