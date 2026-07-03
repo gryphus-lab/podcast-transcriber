@@ -1,10 +1,20 @@
 """Audio transcription using WhisperX with optional speaker diarization."""
 
+import logging
+import warnings
 from pathlib import Path
 
-import torch
-import torchaudio
-import whisperx
+# Suppress noisy warnings from torchcodec/pyannote/lightning/whisperx
+warnings.filterwarnings("ignore", message=".*torchcodec.*")
+warnings.filterwarnings("ignore", message=".*Lightning automatically upgraded.*")
+logging.getLogger("lightning.pytorch.utilities.migration").setLevel(logging.ERROR)
+logging.getLogger("whisperx").setLevel(logging.ERROR)
+logging.getLogger("pyannote").setLevel(logging.ERROR)
+logging.getLogger("whisperx.vads.pyannote").setLevel(logging.ERROR)
+
+import torch  # noqa: E402
+import torchaudio  # noqa: E402
+import whisperx  # noqa: E402
 
 
 def transcribe_audio(
