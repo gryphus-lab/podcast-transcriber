@@ -26,7 +26,12 @@ from .config import (  # noqa: E402
     SUPPORTED_FORMATS,
     WHISPER_MODEL,
 )
-from .utils.converter import convert_audio, get_media_type  # noqa: E402
+from .utils.converter import (  # noqa: E402
+    PODCAST_API_OUTPUT_FORMATS,
+    convert_audio,
+    format_supported_outputs,
+    get_media_type,
+)
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
 
@@ -144,13 +149,12 @@ async def api_convert(
 
     Supported output formats: mp4, mp3, wav, flac, ogg, mkv, webm.
     """
-    allowed_outputs = {"mp4", "mp3", "wav", "flac", "ogg", "mkv", "webm"}
-    if output_format not in allowed_outputs:
+    if output_format not in PODCAST_API_OUTPUT_FORMATS:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Invalid output format '{output_format}'. "
-                f"Supported: {', '.join(sorted(allowed_outputs))}"
+                f"Supported: {format_supported_outputs(PODCAST_API_OUTPUT_FORMATS)}"
             ),
         )
 

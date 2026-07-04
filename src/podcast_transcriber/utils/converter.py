@@ -27,6 +27,14 @@ MEDIA_TYPES = {
     "aac": "audio/aac",
 }
 
+SUPPORTED_OUTPUT_FORMATS = frozenset(CODEC_MAP)
+PODCAST_API_OUTPUT_FORMATS = SUPPORTED_OUTPUT_FORMATS - {"aac"}
+
+
+def format_supported_outputs(output_formats: set[str] | frozenset[str]) -> str:
+    """Return output formats as a stable comma-separated list."""
+    return ", ".join(sorted(output_formats))
+
 
 def get_media_type(output_format: str) -> str:
     """Return the HTTP media type for a converted file format."""

@@ -10,7 +10,12 @@ from typing import Annotated
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from .utils.converter import convert_audio, get_media_type
+from .utils.converter import (
+    SUPPORTED_OUTPUT_FORMATS,
+    convert_audio,
+    format_supported_outputs,
+    get_media_type,
+)
 
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
 
@@ -47,13 +52,12 @@ async def convert(
         output_format: Target format (mp4, mp3, wav, flac, ogg, mkv, webm, aac).
         audio_bitrate: Audio bitrate for lossy formats (default: 192k).
     """
-    allowed_outputs = {"mp4", "mp3", "wav", "flac", "ogg", "mkv", "webm", "aac"}
-    if output_format not in allowed_outputs:
+    if output_format not in SUPPORTED_OUTPUT_FORMATS:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Invalid output format '{output_format}'. "
-                f"Supported: {', '.join(sorted(allowed_outputs))}"
+                f"Supported: {format_supported_outputs(SUPPORTED_OUTPUT_FORMATS)}"
             ),
         )
 
