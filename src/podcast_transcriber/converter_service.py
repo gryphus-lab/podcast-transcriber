@@ -10,6 +10,8 @@ from typing import Annotated
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from .utils.converter import convert_audio, get_media_type
+
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
 
 app = FastAPI(
@@ -72,53 +74,23 @@ async def convert(
     output_path = OUTPUT_DIR / f"{stem}.{output_format}"
 
     try:
-        cmd = ["ffmpeg", "-y", "-i", str(tmp_path)]
-
-        # Codec settings per format
-        codec_map = {
-            "mp4": ["-c:a", "aac", "-b:a", audio_bitrate],
-            "mp3": ["-c:a", "libmp3lame", "-b:a", audio_bitrate],
-            "wav": ["-c:a", "pcm_s16le"],
-            "flac": ["-c:a", "flac"],
-            "ogg": ["-c:a", "libopus", "-b:a", "128k"],
-            "webm": ["-c:a", "libopus", "-b:a", "128k"],
-            "mkv": ["-c:a", "copy"],
-            "aac": ["-c:a", "aac", "-b:a", audio_bitrate],
-        }
-        cmd.extend(codec_map.get(output_format, ["-c:a", "copy"]))
-        cmd.append(str(output_path))
-
-        # Run ffmpeg asynchronously
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        # Convert using shared utility
+        await convert_audio(
+            input_path=tmp_path,
+            output_path=output_path,
+            output_format=output_format,
+            bitrate=audio_bitrate,
+            timeout=300,
         )
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
-
-        if process.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"FFmpeg failed: {stderr.decode()[:500]}",
-            )
-
-        # Determine media type
-        media_types = {
-            "mp4": "video/mp4",
-            "mp3": "audio/mpeg",
-            "wav": "audio/wav",
-            "flac": "audio/flac",
-            "ogg": "audio/ogg",
-            "webm": "audio/webm",
-            "mkv": "video/x-matroska",
-            "aac": "audio/aac",
-        }
 
         return FileResponse(
             path=str(output_path),
-            media_type=media_types.get(output_format, "application/octet-stream"),
+            media_type=get_media_type(output_format),
             filename=output_path.name,
         )
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     except asyncio.TimeoutError as e:
         raise HTTPException(

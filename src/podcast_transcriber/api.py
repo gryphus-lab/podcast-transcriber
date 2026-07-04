@@ -26,6 +26,7 @@ from .config import (  # noqa: E402
     SUPPORTED_FORMATS,
     WHISPER_MODEL,
 )
+from .utils.converter import convert_audio, get_media_type  # noqa: E402
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
 
@@ -172,41 +173,23 @@ async def api_convert(
     output_path = OUTPUT_DIR / f"{stem}.{output_format}"
 
     try:
-        # Build ffmpeg command
-        cmd = ["ffmpeg", "-y", "-i", str(tmp_path)]
-
-        codec_map = {
-            "mp4": ["-c:a", "aac", "-b:a", "192k"],
-            "mp3": ["-c:a", "libmp3lame", "-b:a", "192k"],
-            "wav": ["-c:a", "pcm_s16le"],
-            "flac": ["-c:a", "flac"],
-            "ogg": ["-c:a", "libopus", "-b:a", "128k"],
-            "webm": ["-c:a", "libopus", "-b:a", "128k"],
-            "mkv": ["-c:a", "copy"],
-        }
-        cmd.extend(codec_map.get(output_format, ["-c:a", "copy"]))
-        cmd.append(str(output_path))
-
-        # Run ffmpeg asynchronously
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        # Convert using shared utility
+        await convert_audio(
+            input_path=tmp_path,
+            output_path=output_path,
+            output_format=output_format,
+            bitrate="192k",
+            timeout=300,
         )
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
 
-        if process.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"FFmpeg conversion failed: {stderr.decode()[:500]}",
-            )
-
-        media_type = "video/mp4" if output_format == "mp4" else f"audio/{output_format}"
         return FileResponse(
             path=str(output_path),
-            media_type=media_type,
+            media_type=get_media_type(output_format),
             filename=output_path.name,
         )
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     except asyncio.TimeoutError as e:
         raise HTTPException(status_code=500, detail="Conversion timed out.") from e

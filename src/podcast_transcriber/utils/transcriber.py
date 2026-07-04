@@ -84,15 +84,14 @@ def transcribe_audio(
             {"waveform": waveform, "sample_rate": sample_rate}
         )
 
-        # Convert pyannote DiarizeOutput to DataFrame for whisperx.
-        # DiarizeOutput has .speaker_diarization which is an Annotation object.
+        # Convert pyannote Annotation to DataFrame for whisperx.
+        # The pipeline returns an Annotation object directly.
         import pandas as pd
 
-        annotation = diarize_output.speaker_diarization
         diarize_segments = pd.DataFrame(
             [
                 {"start": seg.start, "end": seg.end, "speaker": speaker}
-                for seg, _, speaker in annotation.itertracks(yield_label=True)
+                for seg, _, speaker in diarize_output.itertracks(yield_label=True)
             ]
         )
 
