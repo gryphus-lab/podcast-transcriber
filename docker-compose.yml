@@ -2,7 +2,8 @@ services:
   transcriber:
     build:
       context: .
-      dockerfile: Dockerfile.transcriber
+      dockerfile: Dockerfile
+      target: transcriber
     ports:
       - "8000:8000"
     environment:
@@ -20,7 +21,8 @@ services:
   converter:
     build:
       context: .
-      dockerfile: Dockerfile.converter
+      dockerfile: Dockerfile
+      target: converter
     ports:
       - "8001:8001"
     environment:
