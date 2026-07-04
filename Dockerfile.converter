@@ -5,20 +5,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /app
 
-# Install minimal Python deps for the converter
-RUN pip install --no-cache-dir \
-    fastapi>=0.115.0 \
-    "uvicorn[standard]>=0.30.0" \
-    python-multipart>=0.0.9 \
-    python-dotenv>=1.0.0
-
-# Copy only the converter service module
+# Minimal pyproject for the converter service
+COPY pyproject.converter.toml pyproject.toml
 COPY src/podcast_transcriber/converter_service.py converter_service.py
+RUN uv sync --frozen --no-dev \
+    && mkdir -p /app/output \
+    && useradd --create-home appuser
 
-# Create output directory
-RUN mkdir -p /app/output
+USER appuser
 
 EXPOSE 8001
 
@@ -26,4 +25,4 @@ ENV HOST=0.0.0.0
 ENV PORT=8001
 ENV OUTPUT_DIR=/app/output
 
-CMD ["uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uv", "run", "uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]

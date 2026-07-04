@@ -1,10 +1,11 @@
 """Standalone FastAPI service for audio/video format conversion via FFmpeg."""
 
+import asyncio
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -25,17 +26,23 @@ async def health():
     return {"status": "ok", "ffmpeg": ffmpeg_available}
 
 
-@app.post("/convert")
+@app.post(
+    "/convert",
+    responses={
+        400: {"description": "Invalid output format"},
+        500: {"description": "FFmpeg not available, conversion failed, or timeout"},
+    },
+)
 async def convert(
-    file: UploadFile = File(...),
-    output_format: str = Form(default="mp4"),
-    audio_bitrate: str = Form(default="192k"),
+    file: Annotated[UploadFile, File(description="Audio file to convert")],
+    output_format: Annotated[str, Form()] = "mp4",
+    audio_bitrate: Annotated[str, Form()] = "192k",
 ):
     """Convert an uploaded audio file to the specified format.
 
     Args:
         file: The audio file to convert.
-        output_format: Target format (mp4, mp3, wav, flac, ogg, mkv, webm).
+        output_format: Target format (mp4, mp3, wav, flac, ogg, mkv, webm, aac).
         audio_bitrate: Audio bitrate for lossy formats (default: 192k).
     """
     allowed_outputs = {"mp4", "mp3", "wav", "flac", "ogg", "mkv", "webm", "aac"}
@@ -55,9 +62,9 @@ async def convert(
 
     # Save uploaded file
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    with tempfile.NamedTemporaryFile(suffix=input_suffix, delete=False) as tmp_in:
-        shutil.copyfileobj(file.file, tmp_in)
-        input_path = Path(tmp_in.name)
+    tmp_path = Path(tempfile.mkstemp(suffix=input_suffix)[1])
+    content = await file.read()
+    await asyncio.to_thread(tmp_path.write_bytes, content)
 
     # Build output path
     stem = Path(file.filename or "output").stem
@@ -65,7 +72,7 @@ async def convert(
     output_path = OUTPUT_DIR / f"{stem}.{output_format}"
 
     try:
-        cmd = ["ffmpeg", "-y", "-i", str(input_path)]
+        cmd = ["ffmpeg", "-y", "-i", str(tmp_path)]
 
         # Codec settings per format
         codec_map = {
@@ -81,12 +88,18 @@ async def convert(
         cmd.extend(codec_map.get(output_format, ["-c:a", "copy"]))
         cmd.append(str(output_path))
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        # Run ffmpeg asynchronously
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
 
-        if result.returncode != 0:
+        if process.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"FFmpeg failed: {result.stderr[:500]}",
+                detail=f"FFmpeg failed: {stderr.decode()[:500]}",
             )
 
         # Determine media type
@@ -107,8 +120,10 @@ async def convert(
             filename=output_path.name,
         )
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Conversion timed out (5 min).")
+    except asyncio.TimeoutError as e:
+        raise HTTPException(
+            status_code=500, detail="Conversion timed out (5 min)."
+        ) from e
 
     finally:
-        input_path.unlink(missing_ok=True)
+        tmp_path.unlink(missing_ok=True)

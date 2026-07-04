@@ -1,12 +1,13 @@
 """FastAPI application exposing transcription and conversion services."""
 
+import asyncio
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 import warnings
 from pathlib import Path
+from typing import Annotated
 
 # Suppress noisy warnings before importing heavy libs
 os.environ["PYTHONWARNINGS"] = "ignore"
@@ -35,14 +36,20 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/transcribe")
+@app.post(
+    "/transcribe",
+    responses={
+        400: {"description": "Invalid input format or parameters"},
+        500: {"description": "Transcription or server error"},
+    },
+)
 async def api_transcribe(
-    file: UploadFile = File(...),
-    model: str = Form(default=WHISPER_MODEL),
-    language: str = Form(default=LANGUAGE),
-    diarize: bool = Form(default=True),
-    hf_token: str = Form(default=""),
-    output_format: str = Form(default="txt"),
+    file: Annotated[UploadFile, File(description="Audio file to transcribe")],
+    model: Annotated[str, Form()] = WHISPER_MODEL,
+    language: Annotated[str, Form()] = LANGUAGE,
+    diarize: Annotated[bool, Form()] = True,
+    hf_token: Annotated[str, Form()] = "",
+    output_format: Annotated[str, Form()] = "txt",
 ):
     """Transcribe an uploaded audio file.
 
@@ -70,13 +77,14 @@ async def api_transcribe(
     token = hf_token or HF_TOKEN
 
     # Save uploaded file to temp location
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = Path(tmp.name)
+    tmp_path = Path(tempfile.mkstemp(suffix=suffix)[1])
+    content = await file.read()
+    await asyncio.to_thread(tmp_path.write_bytes, content)
 
     try:
-        # Transcribe
-        result = transcribe_audio(
+        # Transcribe (run in thread to avoid blocking event loop)
+        result = await asyncio.to_thread(
+            transcribe_audio,
             audio_path=tmp_path,
             model_name=model,
             language=language,
@@ -108,20 +116,26 @@ async def api_transcribe(
             )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     finally:
         tmp_path.unlink(missing_ok=True)
 
 
-@app.post("/convert")
+@app.post(
+    "/convert",
+    responses={
+        400: {"description": "Invalid output format"},
+        500: {"description": "FFmpeg conversion error or timeout"},
+    },
+)
 async def api_convert(
-    file: UploadFile = File(...),
-    output_format: str = Form(default="mp4"),
+    file: Annotated[UploadFile, File(description="Audio file to convert")],
+    output_format: Annotated[str, Form()] = "mp4",
 ):
     """Convert an audio file to MP4 (or other format) using FFmpeg.
 
-    Supported output formats: mp4, mp3, wav, flac, ogg.
+    Supported output formats: mp4, mp3, wav, flac, ogg, mkv, webm.
     """
     allowed_outputs = {"mp4", "mp3", "wav", "flac", "ogg", "mkv", "webm"}
     if output_format not in allowed_outputs:
@@ -142,61 +156,61 @@ async def api_convert(
 
     # Save uploaded file
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    with tempfile.NamedTemporaryFile(suffix=input_suffix, delete=False) as tmp_in:
-        shutil.copyfileobj(file.file, tmp_in)
-        input_path = Path(tmp_in.name)
+    tmp_path = Path(tempfile.mkstemp(suffix=input_suffix)[1])
+    content = await file.read()
+    await asyncio.to_thread(tmp_path.write_bytes, content)
 
     # Output path
     stem = Path(file.filename or "output").stem
-    output_path = OUTPUT_DIR / f"{stem}.{output_format}"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / f"{stem}.{output_format}"
 
     try:
-        # Run ffmpeg conversion
-        cmd = [
-            "ffmpeg",
-            "-y",  # overwrite
-            "-i", str(input_path),
-        ]
+        # Build ffmpeg command
+        cmd = ["ffmpeg", "-y", "-i", str(tmp_path)]
 
-        # Add codec settings based on output format
-        if output_format == "mp4":
-            # For audio-only MP4, use AAC codec
-            cmd.extend(["-c:a", "aac", "-b:a", "192k"])
-        elif output_format == "mp3":
-            cmd.extend(["-c:a", "libmp3lame", "-b:a", "192k"])
-        elif output_format == "wav":
-            cmd.extend(["-c:a", "pcm_s16le"])
-        elif output_format == "flac":
-            cmd.extend(["-c:a", "flac"])
-        elif output_format in ("ogg", "webm"):
-            cmd.extend(["-c:a", "libopus", "-b:a", "128k"])
-        elif output_format == "mkv":
-            cmd.extend(["-c:a", "copy"])
-
+        codec_map = {
+            "mp4": ["-c:a", "aac", "-b:a", "192k"],
+            "mp3": ["-c:a", "libmp3lame", "-b:a", "192k"],
+            "wav": ["-c:a", "pcm_s16le"],
+            "flac": ["-c:a", "flac"],
+            "ogg": ["-c:a", "libopus", "-b:a", "128k"],
+            "webm": ["-c:a", "libopus", "-b:a", "128k"],
+            "mkv": ["-c:a", "copy"],
+        }
+        cmd.extend(codec_map.get(output_format, ["-c:a", "copy"]))
         cmd.append(str(output_path))
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300
+        # Run ffmpeg asynchronously
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
 
-        if result.returncode != 0:
+        if process.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=f"FFmpeg conversion failed: {result.stderr[:500]}",
+                detail=f"FFmpeg conversion failed: {stderr.decode()[:500]}",
             )
 
+        media_type = (
+            "video/mp4" if output_format == "mp4" else f"audio/{output_format}"
+        )
         return FileResponse(
             path=str(output_path),
-            media_type=f"audio/{output_format}" if output_format != "mp4" else "video/mp4",
+            media_type=media_type,
             filename=output_path.name,
         )
 
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Conversion timed out.")
+    except asyncio.TimeoutError as e:
+        raise HTTPException(
+            status_code=500, detail="Conversion timed out."
+        ) from e
 
     finally:
-        input_path.unlink(missing_ok=True)
+        tmp_path.unlink(missing_ok=True)
 
 
 def start():

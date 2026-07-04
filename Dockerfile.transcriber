@@ -6,17 +6,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /app
 
-# Copy project files
-COPY pyproject.toml .
+# Copy project files and install with uv
+COPY pyproject.toml uv.lock ./
 COPY src/ src/
+RUN uv sync --frozen --no-dev \
+    && mkdir -p /app/output \
+    && useradd --create-home appuser
 
-# Install the package (editable so uvicorn can find it)
-RUN pip install --no-cache-dir -e .
-
-# Create output directory
-RUN mkdir -p /app/output
+USER appuser
 
 EXPOSE 8000
 
@@ -26,4 +28,4 @@ ENV OUTPUT_DIR=/app/output
 ENV WHISPER_MODEL=large-v3
 ENV LANGUAGE=en
 
-CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
