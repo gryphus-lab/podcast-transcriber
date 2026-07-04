@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
 # Create output directory and non-root user
-RUN mkdir -p /app/output && useradd --create-home appuser
+RUN mkdir -p /app/output && useradd --create-home appuser && chown -R appuser:appuser /app
 
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
@@ -35,6 +35,9 @@ ENV OUTPUT_DIR=/app/output
 ENV WHISPER_MODEL=large-v3
 ENV LANGUAGE=en
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD [".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+
 CMD [".venv/bin/uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ========== CONVERTER TARGET ==========
@@ -55,5 +58,8 @@ ENV BUILD_TIMESTAMP=2025-06-20
 ENV HOST=0.0.0.0
 ENV PORT=8001
 ENV OUTPUT_DIR=/app/output
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD [".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
 
 CMD [".venv/bin/uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]

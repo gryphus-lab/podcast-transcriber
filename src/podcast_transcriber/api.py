@@ -191,7 +191,7 @@ async def api_convert(
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         raise HTTPException(status_code=500, detail="Conversion timed out.") from e
 
     finally:
