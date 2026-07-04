@@ -3,7 +3,6 @@
 import asyncio
 from pathlib import Path
 
-
 CODEC_MAP = {
     "mp4": ["-c:a", "aac"],
     "mp3": ["-c:a", "libmp3lame"],

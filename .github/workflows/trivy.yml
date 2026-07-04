@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   scan-transcriber:
     permissions:
