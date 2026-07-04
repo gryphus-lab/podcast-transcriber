@@ -1,0 +1,35 @@
+services:
+  transcriber:
+    build:
+      context: .
+      dockerfile: Dockerfile.transcriber
+    ports:
+      - "8000:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+      - LANGUAGE=${LANGUAGE:-en}
+      - OUTPUT_DIR=/app/output
+    volumes:
+      - transcriber-output:/app/output
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    restart: unless-stopped
+
+  converter:
+    build:
+      context: .
+      dockerfile: Dockerfile.converter
+    ports:
+      - "8001:8001"
+    environment:
+      - OUTPUT_DIR=/app/output
+    volumes:
+      - converter-output:/app/output
+    restart: unless-stopped
+
+volumes:
+  transcriber-output:
+  converter-output:

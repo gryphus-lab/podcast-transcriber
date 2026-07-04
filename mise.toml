@@ -33,8 +33,20 @@ description = "Install dependencies using uv"
 run = "uv sync"
 
 [tasks.transcribe]
-description = "Transcribe an audio file"
+description = "Transcribe an audio file (CLI)"
 run = "uv run transcribe {args}"
+
+[tasks.api]
+description = "Start the transcription API server"
+run = "uv run transcribe-api"
+
+[tasks.docker-up]
+description = "Start both services via Docker Compose"
+run = "docker compose up --build -d"
+
+[tasks.docker-down]
+description = "Stop Docker services"
+run = "docker compose down"
 
 [tasks.add]
 description = "Add a new dependency"
