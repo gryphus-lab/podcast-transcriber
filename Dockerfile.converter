@@ -10,10 +10,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Minimal pyproject for the converter service
+# Copy converter pyproject and service module, install with uv
 COPY pyproject.converter.toml pyproject.toml
 COPY src/podcast_transcriber/converter_service.py converter_service.py
-RUN uv sync --frozen --no-dev \
+RUN uv sync --no-dev \
     && mkdir -p /app/output \
     && useradd --create-home appuser
 

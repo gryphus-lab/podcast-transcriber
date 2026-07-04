@@ -12,9 +12,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy project files and install with uv
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml .
 COPY src/ src/
-RUN uv sync --frozen --no-dev \
+RUN uv sync --no-dev \
     && mkdir -p /app/output \
     && useradd --create-home appuser
 
