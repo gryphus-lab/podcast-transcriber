@@ -16,12 +16,18 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 logging.getLogger("whisperx").setLevel(logging.ERROR)
 logging.getLogger("pyannote").setLevel(logging.ERROR)
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
-from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL
-from .utils.formatter import format_transcript, write_transcript
-from .utils.transcriber import transcribe_audio
+from .config import (  # noqa: E402
+    HF_TOKEN,
+    LANGUAGE,
+    OUTPUT_DIR,
+    SUPPORTED_FORMATS,
+    WHISPER_MODEL,
+)
+from .utils.formatter import format_transcript, write_transcript  # noqa: E402
+from .utils.transcriber import transcribe_audio  # noqa: E402
 
 app = FastAPI(
     title="Podcast Transcriber API",
@@ -195,9 +201,7 @@ async def api_convert(
                 detail=f"FFmpeg conversion failed: {stderr.decode()[:500]}",
             )
 
-        media_type = (
-            "video/mp4" if output_format == "mp4" else f"audio/{output_format}"
-        )
+        media_type = "video/mp4" if output_format == "mp4" else f"audio/{output_format}"
         return FileResponse(
             path=str(output_path),
             media_type=media_type,
@@ -205,9 +209,7 @@ async def api_convert(
         )
 
     except asyncio.TimeoutError as e:
-        raise HTTPException(
-            status_code=500, detail="Conversion timed out."
-        ) from e
+        raise HTTPException(status_code=500, detail="Conversion timed out.") from e
 
     finally:
         tmp_path.unlink(missing_ok=True)
