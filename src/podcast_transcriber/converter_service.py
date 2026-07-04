@@ -80,7 +80,7 @@ async def convert(
             output_path=output_path,
             output_format=output_format,
             bitrate=audio_bitrate,
-            timeout=300,
+            timeout_seconds=300,
         )
 
         return FileResponse(

@@ -34,6 +34,9 @@ select = ["E", "F", "I", "N", "W"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=src/podcast_transcriber --cov-report=html --cov-report=term-missing --cov-report=xml:coverage.xml"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.:starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["src/podcast_transcriber"]

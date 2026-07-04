@@ -1,6 +1,5 @@
 """Tests for the standalone converter service."""
 
-import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
@@ -112,28 +111,13 @@ def test_convert_reports_ffmpeg_stderr(tmp_path):
 
 
 def test_convert_reports_timeout(tmp_path):
-    class FakeProcess:
-        returncode = 0
-
-        async def communicate(self):
-            return b"", b""
-
-    async def fake_create_subprocess_exec(*cmd, **kwargs):
-        return FakeProcess()
-
-    async def fake_wait_for(awaitable, timeout):
-        awaitable.close()
-        raise asyncio.TimeoutError
+    async def fake_convert_audio(**kwargs):
+        raise TimeoutError
 
     with (
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
         patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
-        patch.object(
-            converter_module.asyncio,
-            "create_subprocess_exec",
-            side_effect=fake_create_subprocess_exec,
-        ),
-        patch.object(converter_module.asyncio, "wait_for", side_effect=fake_wait_for),
+        patch.object(converter_module, "convert_audio", side_effect=fake_convert_audio),
     ):
         response = client.post(
             "/convert",

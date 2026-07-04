@@ -38,7 +38,7 @@ async def convert_audio(
     output_path: Path,
     output_format: str,
     bitrate: str = "192k",
-    timeout: int = 300,
+    timeout_seconds: int = 300,
 ) -> None:
     """Convert an audio file with FFmpeg.
 
@@ -62,8 +62,10 @@ async def convert_audio(
     )
 
     try:
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except asyncio.TimeoutError as e:
+        async with asyncio.timeout(timeout_seconds):
+            _, stderr = await process.communicate()
+    except TimeoutError as e:
+        process.kill()
         raise TimeoutError("Conversion timed out.") from e
 
     if process.returncode != 0:

@@ -179,7 +179,7 @@ async def api_convert(
             output_path=output_path,
             output_format=output_format,
             bitrate="192k",
-            timeout=300,
+            timeout_seconds=300,
         )
 
         return FileResponse(
