@@ -16,7 +16,6 @@ services:
       resources:
         limits:
           memory: 8G
-    restart: unless-stopped
 
   converter:
     build:
@@ -28,7 +27,6 @@ services:
       - OUTPUT_DIR=/app/output
     volumes:
       - converter-output:/app/output
-    restart: unless-stopped
 
 volumes:
   transcriber-output:

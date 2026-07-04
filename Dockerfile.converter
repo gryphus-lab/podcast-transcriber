@@ -21,8 +21,9 @@ USER appuser
 
 EXPOSE 8001
 
+ENV BUILD_TIMESTAMP=2025-06-20
 ENV HOST=0.0.0.0
 ENV PORT=8001
 ENV OUTPUT_DIR=/app/output
 
-CMD ["uv", "run", "uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD [".venv/bin/uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
