@@ -139,7 +139,7 @@ async def api_transcribe(
 
     except Exception as e:
         logging.getLogger(__name__).exception("Transcription failed")
-        raise HTTPException(status_code=500, detail="Transcription failed.") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     finally:
         tmp_path.unlink(missing_ok=True)
