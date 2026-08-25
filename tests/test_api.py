@@ -96,6 +96,19 @@ def test_transcribe_errors_are_reported_as_500(tmp_path):
     assert response.json()["detail"] == "model failed"
 
 
+def test_transcribe_rejects_oversized_upload():
+    """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
+    with patch.object(api_module, "MAX_UPLOAD_SIZE", 100):
+        response = client.post(
+            "/transcribe",
+            data={"output_format": "txt"},
+            files={"file": ("episode.wav", b"x" * 200, "audio/wav")},
+        )
+
+    assert response.status_code == 413
+    assert "exceeds maximum size" in response.json()["detail"]
+
+
 def test_convert_rejects_invalid_output_format():
     response = client.post(
         "/convert",
@@ -151,9 +164,65 @@ def test_convert_success_builds_command_and_returns_file(tmp_path):
     assert response.status_code == 200
     assert response.content == b"converted"
     assert response.headers["content-type"].startswith("audio/mpeg")
+    # Check that download filename is still original stem
+    assert response.headers["content-disposition"].endswith("episode.mp3\"")
     cmd = fake_create_subprocess_exec.cmd
     assert cmd[:3] == ("ffmpeg", "-y", "-i")
-    assert cmd[-5:] == ("-c:a", "libmp3lame", "-b:a", "192k", str(tmp_path / "episode.mp3"))
+    # Output file should have UUID to prevent concurrent overwrites
+    output_path = Path(cmd[-1])
+    assert output_path.parent == tmp_path
+    assert output_path.name.startswith("episode_")
+    assert output_path.name.endswith(".mp3")
+    assert cmd[-5:] == ("-c:a", "libmp3lame", "-b:a", "192k", str(output_path))
+
+
+def test_convert_success_prevents_concurrent_overwrites(tmp_path):
+    """Verify that concurrent requests don't overwrite the same output file."""
+    responses = []
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        output_path = Path(cmd[-1])
+        output_path.write_bytes(b"converted")
+        responses.append({
+            "cmd": cmd,
+            "output_path": str(output_path),
+        })
+        return FakeProcess()
+
+    with (
+        patch.object(api_module, "OUTPUT_DIR", tmp_path),
+        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(
+            api_module.asyncio,
+            "create_subprocess_exec",
+            side_effect=fake_create_subprocess_exec,
+        ),
+    ):
+        # Make two requests with same filename
+        response1 = client.post(
+            "/convert",
+            data={"output_format": "mp3"},
+            files={"file": ("episode.m4a", b"audio1", "audio/mp4")},
+        )
+        response2 = client.post(
+            "/convert",
+            data={"output_format": "mp3"},
+            files={"file": ("episode.m4a", b"audio2", "audio/mp4")},
+        )
+
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    # Verify they used different output files
+    assert responses[0]["output_path"] != responses[1]["output_path"]
+    # But download filenames are the same
+    assert response1.headers["content-disposition"].endswith("episode.mp3\"")
+    assert response2.headers["content-disposition"].endswith("episode.mp3\"")
 
 
 def test_convert_reports_ffmpeg_failure(tmp_path):
@@ -183,3 +252,16 @@ def test_convert_reports_ffmpeg_failure(tmp_path):
 
     assert response.status_code == 500
     assert "FFmpeg conversion failed: bad codec" in response.json()["detail"]
+
+
+def test_convert_rejects_oversized_upload():
+    """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
+    with patch.object(api_module, "MAX_UPLOAD_SIZE", 100):
+        response = client.post(
+            "/convert",
+            data={"output_format": "mp3"},
+            files={"file": ("episode.m4a", b"x" * 200, "audio/mp4")},
+        )
+
+    assert response.status_code == 413
+    assert "exceeds maximum size" in response.json()["detail"]

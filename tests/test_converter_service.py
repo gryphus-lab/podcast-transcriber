@@ -72,12 +72,19 @@ def test_convert_success_uses_requested_bitrate_and_media_type(tmp_path):
     assert response.status_code == 200
     assert response.content == b"converted"
     assert response.headers["content-type"].startswith("audio/aac")
+    # Check that download filename is still original stem
+    assert response.headers["content-disposition"].endswith("episode.aac\"")
+    # Output file should have UUID to prevent concurrent overwrites
+    output_path = Path(fake_create_subprocess_exec.cmd[-1])
+    assert output_path.parent == tmp_path
+    assert output_path.name.startswith("episode_")
+    assert output_path.name.endswith(".aac")
     assert fake_create_subprocess_exec.cmd[-5:] == (
         "-c:a",
         "aac",
         "-b:a",
         "256k",
-        str(tmp_path / "episode.aac"),
+        str(output_path),
     )
 
 
@@ -110,6 +117,52 @@ def test_convert_reports_ffmpeg_stderr(tmp_path):
     assert "FFmpeg conversion failed: cannot decode" in response.json()["detail"]
 
 
+def test_convert_prevents_concurrent_overwrites(tmp_path):
+    """Verify that concurrent requests don't overwrite the same output file."""
+    output_paths = []
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        output_path = Path(cmd[-1])
+        output_path.write_bytes(b"converted")
+        output_paths.append(str(output_path))
+        return FakeProcess()
+
+    with (
+        patch.object(converter_module, "OUTPUT_DIR", tmp_path),
+        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(
+            converter_module.asyncio,
+            "create_subprocess_exec",
+            side_effect=fake_create_subprocess_exec,
+        ),
+    ):
+        # Make two requests with same filename
+        response1 = client.post(
+            "/convert",
+            data={"output_format": "wav"},
+            files={"file": ("episode.m4a", b"audio1", "audio/mp4")},
+        )
+        response2 = client.post(
+            "/convert",
+            data={"output_format": "wav"},
+            files={"file": ("episode.m4a", b"audio2", "audio/mp4")},
+        )
+
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    # Verify they used different output files
+    assert output_paths[0] != output_paths[1]
+    # But download filenames are the same
+    assert response1.headers["content-disposition"].endswith("episode.wav\"")
+    assert response2.headers["content-disposition"].endswith("episode.wav\"")
+
+
 def test_convert_reports_timeout(tmp_path):
     async def fake_convert_audio(**kwargs):
         raise TimeoutError
@@ -127,3 +180,16 @@ def test_convert_reports_timeout(tmp_path):
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Conversion timed out (5 min)."
+
+
+def test_convert_rejects_oversized_upload():
+    """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
+    with patch.object(converter_module, "MAX_UPLOAD_SIZE", 100):
+        response = client.post(
+            "/convert",
+            data={"output_format": "mp3"},
+            files={"file": ("episode.m4a", b"x" * 200, "audio/mp4")},
+        )
+
+    assert response.status_code == 413
+    assert "exceeds maximum size" in response.json()["detail"]

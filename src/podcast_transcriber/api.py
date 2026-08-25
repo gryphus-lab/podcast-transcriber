@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import tempfile
+import uuid
 import warnings
 from pathlib import Path
 from typing import Annotated
@@ -29,6 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from .config import (  # noqa: E402
     HF_TOKEN,
     LANGUAGE,
+    MAX_UPLOAD_SIZE,
     OUTPUT_DIR,
     SUPPORTED_FORMATS,
     WHISPER_MODEL,
@@ -96,10 +98,31 @@ async def api_transcribe(
     # Use env token if none provided
     token = hf_token or HF_TOKEN
 
-    # Save uploaded file to temp location
-    tmp_path = Path(tempfile.mkstemp(suffix=suffix)[1])
-    content = await file.read()
-    await asyncio.to_thread(tmp_path.write_bytes, content)
+    # Save uploaded file to temp location with bounded streaming
+    fd, tmp_file = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)  # Close fd before writing
+    tmp_path = Path(tmp_file)
+    
+    # Stream upload in bounded chunks
+    cumulative_size = 0
+    chunk_size = 1024 * 1024  # 1MB chunks
+    try:
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                cumulative_size += len(chunk)
+                if cumulative_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
     try:
         # Transcribe (run in thread to avoid blocking event loop)
@@ -177,16 +200,39 @@ async def api_convert(
             detail="FFmpeg is not installed on this server.",
         )
 
-    # Save uploaded file
+    # Save uploaded file with bounded streaming
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    tmp_path = Path(tempfile.mkstemp(suffix=input_suffix)[1])
-    content = await file.read()
-    await asyncio.to_thread(tmp_path.write_bytes, content)
+    fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
+    os.close(fd)  # Close fd before writing
+    tmp_path = Path(tmp_file)
+    
+    # Stream upload in bounded chunks
+    cumulative_size = 0
+    chunk_size = 1024 * 1024  # 1MB chunks
+    try:
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                cumulative_size += len(chunk)
+                if cumulative_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
-    # Output path
+    # Output path with unique filename to prevent concurrent overwrites
     stem = Path(file.filename or "output").stem
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{stem}.{output_format}"
+    unique_name = f"{stem}_{uuid.uuid4().hex}.{output_format}"
+    output_path = OUTPUT_DIR / unique_name
+    download_name = f"{stem}.{output_format}"
 
     try:
         # Convert using shared utility
@@ -203,7 +249,7 @@ async def api_convert(
         return FileResponse(
             path=str(output_path),
             media_type=get_media_type(output_format),
-            filename=output_path.name,
+            filename=download_name,
         )
 
     except RuntimeError as e:

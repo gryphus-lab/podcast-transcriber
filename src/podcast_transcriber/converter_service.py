@@ -4,6 +4,7 @@ import asyncio
 import os
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Annotated
 
@@ -18,6 +19,7 @@ from .utils.converter import (
 )
 
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
+MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024))  # 500MB default
 
 app = FastAPI(
     title="Audio Converter API",
@@ -67,16 +69,39 @@ async def convert(
             status_code=500, detail="FFmpeg is not installed on this server."
         )
 
-    # Save uploaded file
+    # Save uploaded file with bounded streaming
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    tmp_path = Path(tempfile.mkstemp(suffix=input_suffix)[1])
-    content = await file.read()
-    await asyncio.to_thread(tmp_path.write_bytes, content)
+    fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
+    os.close(fd)  # Close fd before writing
+    tmp_path = Path(tmp_file)
+    
+    # Stream upload in bounded chunks
+    cumulative_size = 0
+    chunk_size = 1024 * 1024  # 1MB chunks
+    try:
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                cumulative_size += len(chunk)
+                if cumulative_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
-    # Build output path
+    # Build output path with unique filename to prevent concurrent overwrites
     stem = Path(file.filename or "output").stem
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{stem}.{output_format}"
+    unique_name = f"{stem}_{uuid.uuid4().hex}.{output_format}"
+    output_path = OUTPUT_DIR / unique_name
+    download_name = f"{stem}.{output_format}"
 
     try:
         # Convert using shared utility
@@ -93,7 +118,7 @@ async def convert(
         return FileResponse(
             path=str(output_path),
             media_type=get_media_type(output_format),
-            filename=output_path.name,
+            filename=download_name,
         )
 
     except RuntimeError as e:
