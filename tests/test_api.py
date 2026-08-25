@@ -256,7 +256,10 @@ def test_convert_reports_ffmpeg_failure(tmp_path):
 
 def test_convert_rejects_oversized_upload():
     """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
-    with patch.object(api_module, "MAX_UPLOAD_SIZE", 100):
+    with (
+        patch.object(api_module, "MAX_UPLOAD_SIZE", 100),
+        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+    ):
         response = client.post(
             "/convert",
             data={"output_format": "mp3"},
