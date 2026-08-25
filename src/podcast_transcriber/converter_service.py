@@ -19,15 +19,46 @@ from .utils.converter import (
 )
 
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
-MAX_UPLOAD_SIZE = int(
-    os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024)
-)  # 500MB default
+MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024))  # 500MB default
 
 app = FastAPI(
     title="Audio Converter API",
     description="Convert audio files between formats using FFmpeg.",
     version="0.1.0",
 )
+
+
+async def _stream_upload_to_file(file: UploadFile, tmp_path: Path) -> None:
+    """Stream uploaded file to disk in bounded chunks.
+
+    Args:
+        file: The uploaded file.
+        tmp_path: Path to write the file to.
+
+    Raises:
+        HTTPException: If upload exceeds MAX_UPLOAD_SIZE or write fails.
+    """
+    cumulative_size = 0
+    chunk_size = 1024 * 1024  # 1MB chunks
+    try:
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                cumulative_size += len(chunk)
+                if cumulative_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    except OSError as e:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
 
 @app.get("/health")
@@ -76,29 +107,7 @@ async def convert(
     fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
     os.close(fd)  # Close fd before writing
     tmp_path = Path(tmp_file)
-
-    # Stream upload in bounded chunks
-    cumulative_size = 0
-    chunk_size = 1024 * 1024  # 1MB chunks
-    try:
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                cumulative_size += len(chunk)
-                if cumulative_size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
-                    )
-                f.write(chunk)
-    except HTTPException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-    except Exception as e:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
+    await _stream_upload_to_file(file, tmp_path)
 
     # Build output path with unique filename to prevent concurrent overwrites
     stem = Path(file.filename or "output").stem
