@@ -19,7 +19,9 @@ from .utils.converter import (
 )
 
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
-MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024))  # 500MB default
+MAX_UPLOAD_SIZE = int(
+    os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024)
+)  # 500MB default
 
 app = FastAPI(
     title="Audio Converter API",
@@ -74,7 +76,7 @@ async def convert(
     fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
     os.close(fd)  # Close fd before writing
     tmp_path = Path(tmp_file)
-    
+
     # Stream upload in bounded chunks
     cumulative_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks

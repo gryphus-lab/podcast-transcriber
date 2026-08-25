@@ -102,7 +102,7 @@ async def api_transcribe(
     fd, tmp_file = tempfile.mkstemp(suffix=suffix)
     os.close(fd)  # Close fd before writing
     tmp_path = Path(tmp_file)
-    
+
     # Stream upload in bounded chunks
     cumulative_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks
@@ -207,7 +207,7 @@ async def api_convert(
     fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
     os.close(fd)  # Close fd before writing
     tmp_path = Path(tmp_file)
-    
+
     # Stream upload in bounded chunks
     cumulative_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks
