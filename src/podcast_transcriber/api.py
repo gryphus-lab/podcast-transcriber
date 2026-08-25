@@ -120,8 +120,10 @@ async def api_transcribe(
                     )
                 f.write(chunk)
     except HTTPException:
+        tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
+        tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
     try:
@@ -223,8 +225,10 @@ async def api_convert(
                     )
                 f.write(chunk)
     except HTTPException:
+        tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
+        tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
     # Output path with unique filename to prevent concurrent overwrites

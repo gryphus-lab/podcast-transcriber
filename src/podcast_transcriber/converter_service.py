@@ -92,8 +92,10 @@ async def convert(
                     )
                 f.write(chunk)
     except HTTPException:
+        tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
+        tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
     # Build output path with unique filename to prevent concurrent overwrites
