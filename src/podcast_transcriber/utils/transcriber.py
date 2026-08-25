@@ -30,10 +30,6 @@ def transcribe_audio(
         Dict with 'segments' list. Each segment has 'start', 'end', 'text',
         and optionally 'speaker' keys.
     """
-    if device == "cpu" and torch.backends.mps.is_available():
-        # WhisperX doesn't fully support MPS yet, stick with CPU
-        device = "cpu"
-
     # Load model
     model = whisperx.load_model(
         model_name,
