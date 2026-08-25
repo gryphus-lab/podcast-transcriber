@@ -17,7 +17,7 @@ transcribe = "podcast_transcriber.__main__:main"
 transcribe-api = "podcast_transcriber.api:start"
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=83.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
