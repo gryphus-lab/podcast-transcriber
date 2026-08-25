@@ -74,6 +74,7 @@ async def convert_audio(
             _, stderr = await process.communicate()
     except TimeoutError as e:
         process.kill()
+        await process.wait()
         raise TimeoutError("Conversion timed out.") from e
 
     if process.returncode != 0:
