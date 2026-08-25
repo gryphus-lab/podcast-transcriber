@@ -1,10 +1,11 @@
 """Tests for the CLI entry point in __main__.py."""
 
-import argparse
 import logging
 import os
+import sys
+from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import podcast_transcriber.__main__ as main_module
 
@@ -26,7 +27,7 @@ class TestWarningAndLoggingSuppression:
             assert logging.getLogger(name).level == logging.ERROR
 
 
-def _make_args(**overrides: object) -> argparse.Namespace:
+def _make_args(**overrides: object) -> Namespace:
     defaults = {
         "audio_file": Path("podcast.m4a"),
         "model": "large-v3",
@@ -38,7 +39,92 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "format": "txt",
     }
     defaults.update(overrides)
-    return argparse.Namespace(**defaults)
+    return Namespace(**defaults)
+
+
+class TestParseArgs:
+    """Verify CLI argument parsing."""
+
+    def test_uses_defaults(self, tmp_path):
+        audio_file = tmp_path / "podcast.m4a"
+        argv = ["transcribe", str(audio_file)]
+
+        with patch.object(sys, "argv", argv):
+            args = main_module.parse_args()
+
+        assert args.audio_file == audio_file
+        assert args.model == main_module.WHISPER_MODEL
+        assert args.language == main_module.LANGUAGE
+        assert args.diarize is True
+        assert args.no_diarize is False
+        assert args.output_dir == main_module.OUTPUT_DIR
+        assert args.format == "txt"
+
+    def test_accepts_overrides(self, tmp_path):
+        audio_file = tmp_path / "podcast.wav"
+        output_dir = tmp_path / "transcripts"
+        argv = [
+            "transcribe",
+            str(audio_file),
+            "--model",
+            "medium",
+            "--language",
+            "de",
+            "--no-diarize",
+            "--hf-token",
+            "hf_token",
+            "--output-dir",
+            str(output_dir),
+            "--format",
+            "srt",
+        ]
+
+        with patch.object(sys, "argv", argv):
+            args = main_module.parse_args()
+
+        assert args.audio_file == audio_file
+        assert args.model == "medium"
+        assert args.language == "de"
+        assert args.no_diarize is True
+        assert args.hf_token == "hf_token"
+        assert args.output_dir == output_dir
+        assert args.format == "srt"
+
+
+class TestValidateInputs:
+    """Verify CLI input validation."""
+
+    def test_returns_false_for_missing_file(self, tmp_path, capsys):
+        args = _make_args(audio_file=tmp_path / "missing.m4a")
+
+        assert main_module.validate_inputs(args) is False
+        captured = capsys.readouterr()
+        assert "File not found" in captured.out
+
+    def test_returns_false_for_unsupported_suffix(self, tmp_path, capsys):
+        audio_file = tmp_path / "notes.txt"
+        audio_file.write_text("not audio", encoding="utf-8")
+        args = _make_args(audio_file=audio_file)
+
+        assert main_module.validate_inputs(args) is False
+        captured = capsys.readouterr()
+        assert "Unsupported format" in captured.out
+
+    def test_returns_false_when_diarization_requires_token(self, tmp_path, capsys):
+        audio_file = tmp_path / "podcast.m4a"
+        audio_file.write_text("audio", encoding="utf-8")
+        args = _make_args(audio_file=audio_file, hf_token="")
+
+        assert main_module.validate_inputs(args) is False
+        captured = capsys.readouterr()
+        assert "No HF_TOKEN set" in captured.out
+
+    def test_returns_true_when_no_diarize_skips_token(self, tmp_path):
+        audio_file = tmp_path / "podcast.m4a"
+        audio_file.write_text("audio", encoding="utf-8")
+        args = _make_args(audio_file=audio_file, hf_token="", no_diarize=True)
+
+        assert main_module.validate_inputs(args) is True
 
 
 class TestMainSuccessPath:

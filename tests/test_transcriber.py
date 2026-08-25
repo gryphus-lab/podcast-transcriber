@@ -4,6 +4,8 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 import podcast_transcriber.utils.transcriber as transcriber_module
 
 
@@ -82,9 +84,7 @@ def test_transcribe_audio_assigns_speakers_when_token_is_available(
     model.transcribe.return_value = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
     aligned_result = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
     speaker_result = {
-        "segments": [
-            {"start": 0, "end": 1, "text": "Hi", "speaker": "SPEAKER_00"}
-        ]
+        "segments": [{"start": 0, "end": 1, "text": "Hi", "speaker": "SPEAKER_00"}]
     }
 
     monkeypatch.setattr(
@@ -173,14 +173,12 @@ def test_transcribe_audio_raises_when_diarization_model_cannot_load(
         SimpleNamespace(Pipeline=pipeline_cls),
     )
 
-    try:
+    with pytest.raises(
+        RuntimeError, match="Failed to load pyannote diarization model"
+    ):
         transcriber_module.transcribe_audio(
             audio_path,
             diarize=True,
             hf_token="hf_token",
             device="cpu",
         )
-    except RuntimeError as exc:
-        assert "Failed to load pyannote diarization model" in str(exc)
-    else:
-        raise AssertionError("Expected RuntimeError")

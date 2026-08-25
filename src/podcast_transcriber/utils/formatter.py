@@ -1,10 +1,14 @@
 """Transcript formatting and output writing."""
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
+
+Segment = Mapping[str, Any]
 
 
-def format_transcript(result: dict, output_format: str = "txt") -> str:
+def format_transcript(result: Mapping[str, Any], output_format: str = "txt") -> str:
     """Format transcription result into the desired output format.
 
     Args:
@@ -18,10 +22,9 @@ def format_transcript(result: dict, output_format: str = "txt") -> str:
 
     if output_format == "json":
         return _format_json(segments)
-    elif output_format == "srt":
+    if output_format == "srt":
         return _format_srt(segments)
-    else:
-        return _format_txt(segments)
+    return _format_txt(segments)
 
 
 def write_transcript(
@@ -47,7 +50,7 @@ def write_transcript(
     return output_path
 
 
-def _format_txt(segments: list) -> str:
+def _format_txt(segments: Sequence[Segment]) -> str:
     """Format segments as plain text with speaker labels."""
     lines = []
     current_speaker = None
@@ -68,7 +71,7 @@ def _format_txt(segments: list) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def _format_srt(segments: list) -> str:
+def _format_srt(segments: Sequence[Segment]) -> str:
     """Format segments as SRT subtitles."""
     lines = []
 
@@ -90,7 +93,7 @@ def _format_srt(segments: list) -> str:
     return "\n".join(lines)
 
 
-def _format_json(segments: list) -> str:
+def _format_json(segments: Sequence[Segment]) -> str:
     """Format segments as JSON."""
     cleaned = []
     for segment in segments:
@@ -109,8 +112,8 @@ def _format_json(segments: list) -> str:
 
 def _seconds_to_srt_time(seconds: float) -> str:
     """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
+    total_millis = round(seconds * 1000)
+    hours, remainder = divmod(total_millis, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"

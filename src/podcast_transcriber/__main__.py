@@ -12,8 +12,8 @@ from pathlib import Path  # noqa: E402
 from rich.console import Console  # noqa: E402
 
 from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL  # noqa: E402
-from .utils.transcriber import transcribe_audio  # noqa: E402
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
+from .utils.transcriber import transcribe_audio  # noqa: E402
 
 console = Console()
 
@@ -146,7 +146,7 @@ def main() -> int:
         console.print("\n[yellow]Interrupted.[/yellow] Exiting.")
         return 130
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         console.print(f"\n[red]Error:[/red] {e}")
         return 1
 

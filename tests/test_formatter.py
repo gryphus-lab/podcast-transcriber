@@ -87,6 +87,9 @@ class TestSecondsToSrtTime:
     def test_hours(self):
         assert _seconds_to_srt_time(3661.123) == "01:01:01,123"
 
+    def test_rounds_milliseconds(self):
+        assert _seconds_to_srt_time(1.9996) == "00:00:02,000"
+
 
 class TestWriteTranscript:
     """Test file writing."""
