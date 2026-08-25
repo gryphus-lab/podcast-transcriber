@@ -42,7 +42,7 @@ run = "uv run transcribe-api"
 
 [tasks.docker-up]
 description = "Start both services via Docker Compose"
-run = "docker compose up --build -d"
+run = "docker compose --compatibility up --build -d"
 
 [tasks.docker-down]
 description = "Stop Docker services"

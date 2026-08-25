@@ -16,7 +16,14 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 logging.getLogger("whisperx").setLevel(logging.ERROR)
 logging.getLogger("pyannote").setLevel(logging.ERROR)
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
+from fastapi import (  # noqa: E402
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
 from .config import (  # noqa: E402
@@ -56,6 +63,7 @@ async def health():
     },
 )
 async def api_transcribe(
+    background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File(description="Audio file to transcribe")],
     model: Annotated[str, Form()] = WHISPER_MODEL,
     language: Annotated[str, Form()] = LANGUAGE,
@@ -116,6 +124,8 @@ async def api_transcribe(
             output_format=output_format,
         )
 
+        background_tasks.add_task(output_path.unlink, missing_ok=True)
+
         if output_format == "json":
             import json
 
@@ -128,7 +138,8 @@ async def api_transcribe(
             )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logging.getLogger(__name__).exception("Transcription failed")
+        raise HTTPException(status_code=500, detail="Transcription failed.") from e
 
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -142,6 +153,7 @@ async def api_transcribe(
     },
 )
 async def api_convert(
+    background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File(description="Audio file to convert")],
     output_format: Annotated[str, Form()] = "mp4",
 ):
@@ -185,6 +197,8 @@ async def api_convert(
             bitrate="192k",
             timeout_seconds=300,
         )
+
+        background_tasks.add_task(output_path.unlink, missing_ok=True)
 
         return FileResponse(
             path=str(output_path),

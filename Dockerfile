@@ -45,7 +45,7 @@ FROM base AS converter
 
 # Copy converter dependencies and service
 COPY pyproject.converter.toml pyproject.toml
-COPY src/podcast_transcriber/converter_service.py converter_service.py
+COPY src/ src/
 
 # Install with uv
 RUN uv sync --no-dev
@@ -62,4 +62,4 @@ ENV OUTPUT_DIR=/app/output
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD [".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
 
-CMD [".venv/bin/uvicorn", "converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD [".venv/bin/uvicorn", "podcast_transcriber.converter_service:app", "--host", "0.0.0.0", "--port", "8001"]

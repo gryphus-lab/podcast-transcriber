@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from .utils.converter import (
@@ -41,6 +41,7 @@ async def health():
     },
 )
 async def convert(
+    background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File(description="Audio file to convert")],
     output_format: Annotated[str, Form()] = "mp4",
     audio_bitrate: Annotated[str, Form()] = "192k",
@@ -86,6 +87,8 @@ async def convert(
             bitrate=audio_bitrate,
             timeout_seconds=300,
         )
+
+        background_tasks.add_task(output_path.unlink, missing_ok=True)
 
         return FileResponse(
             path=str(output_path),
