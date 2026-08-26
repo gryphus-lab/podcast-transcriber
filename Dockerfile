@@ -1,65 +1,72 @@
 FROM --platform=linux/amd64 python:3.11-slim AS base
 
-# Install system dependencies
+# Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Create output directory and non-root user
-RUN mkdir -p /app/output && useradd --create-home appuser && chown -R appuser:appuser /app
+# Create non-root user early; output directory created as needed
+RUN useradd --create-home appuser
 
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
-# Copy transcriber dependencies and source
-COPY pyproject.toml .
-COPY src/ src/
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+RUN uv sync --no-dev --no-install-project
+COPY --chown=appuser:appuser src/ src/
+RUN uv sync --no-dev && uv cache prune
 
-# Install with uv
-RUN uv sync --no-dev
+# Create output directory for mounted volumes
+RUN mkdir -p /app/output && chown appuser:appuser /app/output
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    OUTPUT_DIR=/app/output \
+    WHISPER_MODEL=large-v3 \
+    LANGUAGE=en
 
 USER appuser
-
 EXPOSE 8000
 
-ENV BUILD_TIMESTAMP=2025-06-20
-ENV HOST=0.0.0.0
-ENV PORT=8000
-ENV OUTPUT_DIR=/app/output
-ENV WHISPER_MODEL=large-v3
-ENV LANGUAGE=en
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD [".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"
 
-CMD [".venv/bin/uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ========== CONVERTER TARGET ==========
 FROM base AS converter
 
-# Copy converter dependencies and service
-COPY pyproject.converter.toml pyproject.toml
-COPY src/ src/
+COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
+RUN uv sync --no-dev --no-install-project
+COPY --chown=appuser:appuser src/ src/
+RUN uv sync --no-dev && uv cache prune
 
-# Install with uv
-RUN uv sync --no-dev
+# Create output directory for mounted volumes
+RUN mkdir -p /app/output && chown appuser:appuser /app/output
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOST=0.0.0.0 \
+    PORT=8001 \
+    OUTPUT_DIR=/app/output
 
 USER appuser
-
 EXPOSE 8001
 
-ENV BUILD_TIMESTAMP=2025-06-20
-ENV HOST=0.0.0.0
-ENV PORT=8001
-ENV OUTPUT_DIR=/app/output
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD [".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"
 
-CMD [".venv/bin/uvicorn", "podcast_transcriber.converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "podcast_transcriber.converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
