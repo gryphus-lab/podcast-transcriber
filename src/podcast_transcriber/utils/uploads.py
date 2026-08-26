@@ -45,9 +45,7 @@ async def stream_upload_to_file(
         raise HTTPException(status_code=400, detail=f"Upload failed: {e}") from e
 
 
-async def save_upload_to_temp(
-    file: UploadFile, suffix: str, max_size: int
-) -> Path:
+async def save_upload_to_temp(file: UploadFile, suffix: str, max_size: int) -> Path:
     """Create a temp file and stream an upload into it.
 
     Returns the path to the written temp file.

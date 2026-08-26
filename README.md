@@ -39,8 +39,8 @@ audio/video conversion. Available as a **CLI**, a **FastAPI service**, and
    ```
 
 3. Set up your HuggingFace token in `.env`:
-   - Create a token at: https://huggingface.co/settings/tokens
-   - Accept pyannote model terms at: https://huggingface.co/pyannote/speaker-diarization-3.1
+   - Create a token at: <https://huggingface.co/settings/tokens>
+   - Accept pyannote model terms at: <https://huggingface.co/pyannote/speaker-diarization-3.1>
    - Set `HF_TOKEN=hf_your_token_here`
 
 ## Project Structure
@@ -184,7 +184,7 @@ wheels for that platform.
 
 ### Plain text (`--format txt`)
 
-```
+```text
 [SPEAKER_00]
   Hello and welcome to the podcast.
   Today we have a special guest.
@@ -195,7 +195,7 @@ wheels for that platform.
 
 ### SRT subtitles (`--format srt`)
 
-```
+```text
 1
 00:00:00,000 --> 00:00:03,500
 [SPEAKER_00] Hello and welcome to the podcast.
@@ -228,15 +228,15 @@ wheels for that platform.
 
 All settings can be configured via `.env` or CLI arguments (CLI takes precedence):
 
-| Variable          | Default    | Description                                  |
-| ----------------- | ---------- | -------------------------------------------- |
-| `HF_TOKEN`        | (empty)    | HuggingFace token for diarization            |
-| `WHISPER_MODEL`   | `large-v3` | Model size                                   |
-| `LANGUAGE`        | `en`       | Language code                                |
-| `OUTPUT_DIR`      | `output`   | Transcript/conversion output directory       |
-| `MAX_UPLOAD_SIZE` | `524288000` | Max API upload size in bytes (500 MB)       |
-| `HOST`            | `0.0.0.0`  | API server bind address                      |
-| `PORT`            | `8000`     | API server port                              |
+| Variable          | Default     | Description                            |
+| ----------------- | ----------- | -------------------------------------- |
+| `HF_TOKEN`        | (empty)     | HuggingFace token for diarization      |
+| `WHISPER_MODEL`   | `large-v3`  | Model size                             |
+| `LANGUAGE`        | `en`        | Language code                          |
+| `OUTPUT_DIR`      | `output`    | Transcript/conversion output directory |
+| `MAX_UPLOAD_SIZE` | `524288000` | Max API upload size in bytes (500 MB)  |
+| `HOST`            | `0.0.0.0`   | API server bind address                |
+| `PORT`            | `8000`      | API server port                        |
 
 ## Troubleshooting
 
@@ -259,7 +259,7 @@ brew install ffmpeg
 
 You must accept the model terms:
 
-1. Go to https://huggingface.co/pyannote/speaker-diarization-3.1
+1. Go to <https://huggingface.co/pyannote/speaker-diarization-3.1>
 2. Accept the user agreement
 3. Ensure your token has `read` access
 
