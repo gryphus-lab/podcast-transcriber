@@ -1,14 +1,19 @@
 # Podcast Transcriber
 
-A CLI tool for transcribing podcast audio files with automatic speaker diarization (labeling who said what) using [WhisperX](https://github.com/m-bain/whisperX).
+Transcribe podcast audio with automatic speaker diarization (labeling who said
+what) using [WhisperX](https://github.com/m-bain/whisperX), plus FFmpeg-based
+audio/video conversion. Available as a **CLI**, a **FastAPI service**, and
+**Docker containers**.
 
 ## Features
 
-- Transcribes audio files using OpenAI Whisper (via WhisperX)
+- Transcribes audio using OpenAI Whisper (via WhisperX)
 - Speaker diarization - identifies and labels different speakers
 - Multiple output formats: plain text, SRT subtitles, JSON
+- Audio/video conversion via FFmpeg (mp4, mp3, wav, flac, ogg, mkv, webm, aac)
 - Supports `.m4a`, `.mp3`, `.wav`, `.flac`, `.ogg`, `.wma`, `.aac`
 - Configurable model size (tiny to large-v3)
+- Three interfaces: CLI, REST API (FastAPI + Uvicorn), and Docker
 - Apple Silicon compatible (CPU mode)
 
 ## Requirements
@@ -17,6 +22,7 @@ A CLI tool for transcribing podcast audio files with automatic speaker diarizati
 - FFmpeg installed (`brew install ffmpeg`)
 - HuggingFace token (for speaker diarization)
 - `uv` package manager
+- Docker (optional, for containerized services)
 
 ## Installation
 
@@ -44,44 +50,56 @@ podcast-transcriber/
 ├── src/podcast_transcriber/
 │   ├── __init__.py              # Package initialization
 │   ├── __main__.py              # CLI entry point + argument parsing
+│   ├── api.py                   # FastAPI app: /transcribe and /convert
+│   ├── converter_service.py     # Standalone converter FastAPI service
 │   ├── config.py                # Environment variable loading
 │   └── utils/
 │       ├── __init__.py
 │       ├── transcriber.py       # WhisperX transcription + diarization
-│       └── formatter.py         # Output formatting (txt, srt, json)
+│       ├── formatter.py         # Output formatting (txt, srt, json)
+│       ├── converter.py         # Shared FFmpeg conversion helpers
+│       ├── uploads.py           # Bounded upload streaming to temp files
+│       └── warnings_filter.py   # Suppresses noisy third-party warnings
 ├── tests/
+│   ├── test_api.py
 │   ├── test_config.py
-│   └── test_formatter.py
-├── output/                      # Default transcript output directory
-├── docs/
-├── .github/workflows/ci.yml
-├── pyproject.toml
+│   ├── test_converter_service.py
+│   ├── test_formatter.py
+│   ├── test_main.py
+│   └── test_transcriber.py
+├── output/                      # Default output directory
+├── Dockerfile                   # Multi-stage: transcriber + converter targets
+├── docker-compose.yml           # Runs both services
+├── pyproject.toml               # Transcriber deps
+├── pyproject.converter.toml     # Minimal converter deps (no ML libs)
 ├── mise.toml
 ├── .env.example
-└── README.md
+└── .github/workflows/           # ci.yml (tests + SonarQube), trivy.yml (scan)
 ```
 
 ## Usage
 
-### Basic transcription with speaker diarization
+### CLI
+
+Basic transcription with speaker diarization:
 
 ```bash
 uv run transcribe my_podcast.m4a
 ```
 
-### Without diarization (faster, no HF token needed)
+Without diarization (faster, no HF token needed):
 
 ```bash
 uv run transcribe my_podcast.m4a --no-diarize
 ```
 
-### Specify model and output format
+Specify model and output format:
 
 ```bash
 uv run transcribe episode.mp3 --model medium --format srt
 ```
 
-### All options
+All options:
 
 ```bash
 uv run transcribe audio.m4a \
@@ -93,11 +111,74 @@ uv run transcribe audio.m4a \
   --format json
 ```
 
-### Using mise
+Using mise:
 
 ```bash
 mise run transcribe -- my_podcast.m4a --format srt
 ```
+
+### REST API
+
+Start the FastAPI server (exposes `/transcribe`, `/convert`, and `/health`):
+
+```bash
+uv run transcribe-api
+# or
+mise run api
+```
+
+By default it listens on `0.0.0.0:8000` (override with `HOST` / `PORT`).
+Interactive docs are available at `http://localhost:8000/docs`.
+
+Transcribe an upload:
+
+```bash
+curl -X POST http://localhost:8000/transcribe \
+  -F "file=@my_podcast.m4a" \
+  -F "model=large-v3" \
+  -F "language=en" \
+  -F "diarize=true" \
+  -F "output_format=srt" \
+  -o transcript.srt
+```
+
+Convert an upload to MP4:
+
+```bash
+curl -X POST http://localhost:8000/convert \
+  -F "file=@my_podcast.m4a" \
+  -F "output_format=mp4" \
+  -o my_podcast.mp4
+```
+
+### Docker
+
+Two services are built from a single multi-stage `Dockerfile`:
+
+| Service       | Port | Purpose                                        |
+| ------------- | ---- | ---------------------------------------------- |
+| `transcriber` | 8000 | WhisperX transcription + diarization + convert |
+| `converter`   | 8001 | Lightweight FFmpeg-only conversion (no ML)     |
+
+Start both with Docker Compose:
+
+```bash
+docker compose up --build -d
+# or
+mise run docker-up
+```
+
+Stop them:
+
+```bash
+docker compose down
+# or
+mise run docker-down
+```
+
+Set `HF_TOKEN` in your environment (or `.env`) so the transcriber can diarize.
+The images are pinned to `linux/amd64` because some ML dependencies only ship
+wheels for that platform.
 
 ## Output Formats
 
@@ -147,12 +228,15 @@ mise run transcribe -- my_podcast.m4a --format srt
 
 All settings can be configured via `.env` or CLI arguments (CLI takes precedence):
 
-| Variable        | Default    | Description                       |
-| --------------- | ---------- | --------------------------------- |
-| `HF_TOKEN`      | (empty)    | HuggingFace token for diarization |
-| `WHISPER_MODEL` | `large-v3` | Model size                        |
-| `LANGUAGE`      | `en`       | Language code                     |
-| `OUTPUT_DIR`    | `output`   | Transcript output directory       |
+| Variable          | Default    | Description                                  |
+| ----------------- | ---------- | -------------------------------------------- |
+| `HF_TOKEN`        | (empty)    | HuggingFace token for diarization            |
+| `WHISPER_MODEL`   | `large-v3` | Model size                                   |
+| `LANGUAGE`        | `en`       | Language code                                |
+| `OUTPUT_DIR`      | `output`   | Transcript/conversion output directory       |
+| `MAX_UPLOAD_SIZE` | `524288000` | Max API upload size in bytes (500 MB)       |
+| `HOST`            | `0.0.0.0`  | API server bind address                      |
+| `PORT`            | `8000`     | API server port                              |
 
 ## Troubleshooting
 
@@ -182,8 +266,10 @@ You must accept the model terms:
 ## Development
 
 ```bash
-# Run tests
+# Run tests (with coverage)
 uv run pytest
+# or
+mise run test
 
 # Lint
 uv run ruff check .
@@ -191,3 +277,9 @@ uv run ruff check .
 # Format
 uv run ruff format .
 ```
+
+### CI
+
+- `ci.yml` - runs the test suite and a SonarQube scan on push / PR to `main`.
+- `trivy.yml` - builds both Docker targets and scans them for CRITICAL/HIGH
+  vulnerabilities, uploading results to the GitHub Security tab.
