@@ -32,7 +32,7 @@ def test_convert_rejects_invalid_format():
 
 
 def test_convert_requires_ffmpeg():
-    with patch.object(converter_module.shutil, "which", return_value=None):
+    with patch.object(converter_util.shutil, "which", return_value=None):
         response = client.post(
             "/convert",
             data={"output_format": "aac"},
@@ -57,7 +57,7 @@ def test_convert_success_uses_requested_bitrate_and_media_type(tmp_path):
 
     with (
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
-        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
             converter_util.asyncio,
             "create_subprocess_exec",
@@ -101,7 +101,7 @@ def test_convert_reports_ffmpeg_stderr(tmp_path):
 
     with (
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
-        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
             converter_util.asyncio,
             "create_subprocess_exec",
@@ -136,7 +136,7 @@ def test_convert_prevents_concurrent_overwrites(tmp_path):
 
     with (
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
-        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
             converter_util.asyncio,
             "create_subprocess_exec",
@@ -170,8 +170,8 @@ def test_convert_reports_timeout(tmp_path):
 
     with (
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
-        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
-        patch.object(converter_module, "convert_audio", side_effect=fake_convert_audio),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util, "convert_audio", side_effect=fake_convert_audio),
     ):
         response = client.post(
             "/convert",
@@ -187,7 +187,7 @@ def test_convert_rejects_oversized_upload():
     """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
     with (
         patch.object(converter_module, "MAX_UPLOAD_SIZE", 100),
-        patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
     ):
         response = client.post(
             "/convert",

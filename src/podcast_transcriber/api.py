@@ -9,8 +9,6 @@ import asyncio  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 import os  # noqa: E402
-import shutil  # noqa: E402
-import uuid  # noqa: E402
 from pathlib import Path  # noqa: E402
 from typing import Annotated  # noqa: E402
 
@@ -35,15 +33,11 @@ from .config import (  # noqa: E402
 )
 from .utils.converter import (  # noqa: E402
     PODCAST_API_OUTPUT_FORMATS,
-    convert_audio,
-    format_supported_outputs,
-    get_media_type,
+    handle_conversion_request,
 )
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
 from .utils.uploads import save_upload_to_temp  # noqa: E402
-
-CONVERSION_TIMEOUT_SECONDS = 300
 
 app = FastAPI(
     title="Podcast Transcriber API",
@@ -159,59 +153,14 @@ async def api_convert(
 
     Supported output formats: mp4, mp3, wav, flac, ogg, mkv, webm.
     """
-    if output_format not in PODCAST_API_OUTPUT_FORMATS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid output format '{output_format}'. "
-                f"Supported: {format_supported_outputs(PODCAST_API_OUTPUT_FORMATS)}"
-            ),
-        )
-
-    # Check ffmpeg is available
-    if not shutil.which("ffmpeg"):
-        raise HTTPException(
-            status_code=500,
-            detail="FFmpeg is not installed on this server.",
-        )
-
-    # Save uploaded file with bounded streaming
-    input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    tmp_path = await save_upload_to_temp(file, input_suffix, MAX_UPLOAD_SIZE)
-
-    # Output path with unique filename to prevent concurrent overwrites
-    stem = Path(file.filename or "output").stem
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    unique_name = f"{stem}_{uuid.uuid4().hex}.{output_format}"
-    output_path = OUTPUT_DIR / unique_name
-    download_name = f"{stem}.{output_format}"
-
-    try:
-        # Convert using shared utility
-        await convert_audio(
-            input_path=tmp_path,
-            output_path=output_path,
-            output_format=output_format,
-            bitrate="192k",
-            timeout_seconds=CONVERSION_TIMEOUT_SECONDS,
-        )
-
-        background_tasks.add_task(output_path.unlink, missing_ok=True)
-
-        return FileResponse(
-            path=str(output_path),
-            media_type=get_media_type(output_format),
-            filename=download_name,
-        )
-
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-    except TimeoutError as e:
-        raise HTTPException(status_code=500, detail="Conversion timed out.") from e
-
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    return await handle_conversion_request(
+        file=file,
+        output_format=output_format,
+        allowed_formats=PODCAST_API_OUTPUT_FORMATS,
+        max_upload_size=MAX_UPLOAD_SIZE,
+        output_dir=OUTPUT_DIR,
+        background_tasks=background_tasks,
+    )
 
 
 def start() -> None:

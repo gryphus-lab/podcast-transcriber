@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import podcast_transcriber.api as api_module
+import podcast_transcriber.utils.converter as converter_util
 
 
 client = TestClient(api_module.app)
@@ -121,7 +122,7 @@ def test_convert_rejects_invalid_output_format():
 
 
 def test_convert_requires_ffmpeg():
-    with patch.object(api_module.shutil, "which", return_value=None):
+    with patch.object(converter_util.shutil, "which", return_value=None):
         response = client.post(
             "/convert",
             data={"output_format": "mp3"},
@@ -148,9 +149,9 @@ def test_convert_success_builds_command_and_returns_file(tmp_path):
 
     with (
         patch.object(api_module, "OUTPUT_DIR", tmp_path),
-        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            api_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -197,9 +198,9 @@ def test_convert_success_prevents_concurrent_overwrites(tmp_path):
 
     with (
         patch.object(api_module, "OUTPUT_DIR", tmp_path),
-        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            api_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -237,9 +238,9 @@ def test_convert_reports_ffmpeg_failure(tmp_path):
 
     with (
         patch.object(api_module, "OUTPUT_DIR", tmp_path),
-        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            api_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -258,7 +259,7 @@ def test_convert_rejects_oversized_upload():
     """Test that uploads exceeding MAX_UPLOAD_SIZE are rejected."""
     with (
         patch.object(api_module, "MAX_UPLOAD_SIZE", 100),
-        patch.object(api_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
+        patch.object(converter_util.shutil, "which", return_value="/usr/bin/ffmpeg"),
     ):
         response = client.post(
             "/convert",

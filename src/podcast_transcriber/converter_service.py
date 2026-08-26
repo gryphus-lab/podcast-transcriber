@@ -1,23 +1,12 @@
 """Standalone FastAPI service for audio/video format conversion via FFmpeg."""
 
 import shutil
-import uuid
-from pathlib import Path
 from typing import Annotated
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 
 from .config import MAX_UPLOAD_SIZE, OUTPUT_DIR
-from .utils.converter import (
-    SUPPORTED_OUTPUT_FORMATS,
-    convert_audio,
-    format_supported_outputs,
-    get_media_type,
-)
-from .utils.uploads import save_upload_to_temp
-
-CONVERSION_TIMEOUT_SECONDS = 300
+from .utils.converter import SUPPORTED_OUTPUT_FORMATS, handle_conversion_request
 
 app = FastAPI(
     title="Audio Converter API",
@@ -53,54 +42,12 @@ async def convert(
         output_format: Target format (mp4, mp3, wav, flac, ogg, mkv, webm, aac).
         audio_bitrate: Audio bitrate for lossy formats (default: 192k).
     """
-    if output_format not in SUPPORTED_OUTPUT_FORMATS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid output format '{output_format}'. "
-                f"Supported: {format_supported_outputs(SUPPORTED_OUTPUT_FORMATS)}"
-            ),
-        )
-
-    if not shutil.which("ffmpeg"):
-        raise HTTPException(
-            status_code=500, detail="FFmpeg is not installed on this server."
-        )
-
-    # Save uploaded file with bounded streaming
-    input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    tmp_path = await save_upload_to_temp(file, input_suffix, MAX_UPLOAD_SIZE)
-
-    # Build output path with unique filename to prevent concurrent overwrites
-    stem = Path(file.filename or "output").stem
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    unique_name = f"{stem}_{uuid.uuid4().hex}.{output_format}"
-    output_path = OUTPUT_DIR / unique_name
-    download_name = f"{stem}.{output_format}"
-
-    try:
-        # Convert using shared utility
-        await convert_audio(
-            input_path=tmp_path,
-            output_path=output_path,
-            output_format=output_format,
-            bitrate=audio_bitrate,
-            timeout_seconds=CONVERSION_TIMEOUT_SECONDS,
-        )
-
-        background_tasks.add_task(output_path.unlink, missing_ok=True)
-
-        return FileResponse(
-            path=str(output_path),
-            media_type=get_media_type(output_format),
-            filename=download_name,
-        )
-
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-    except TimeoutError as e:
-        raise HTTPException(status_code=500, detail="Conversion timed out.") from e
-
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    return await handle_conversion_request(
+        file=file,
+        output_format=output_format,
+        allowed_formats=SUPPORTED_OUTPUT_FORMATS,
+        max_upload_size=MAX_UPLOAD_SIZE,
+        output_dir=OUTPUT_DIR,
+        background_tasks=background_tasks,
+        bitrate=audio_bitrate,
+    )
