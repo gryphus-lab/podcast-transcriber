@@ -1,17 +1,20 @@
 """FastAPI application exposing transcription and conversion services."""
 
-import asyncio
-import json
-import logging
-import os
-import shutil
-import tempfile
-import uuid
-import warnings
-from pathlib import Path
-from typing import Annotated
+# Suppress noisy warnings BEFORE importing heavy libs (whisperx, pyannote, ...)
+from .utils.warnings_filter import suppress_noisy_output
 
-import uvicorn
+suppress_noisy_output()
+
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import uuid  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Annotated  # noqa: E402
+
+import uvicorn  # noqa: E402
 from fastapi import (  # noqa: E402
     BackgroundTasks,
     FastAPI,
@@ -38,52 +41,15 @@ from .utils.converter import (  # noqa: E402
 )
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
+from .utils.uploads import save_upload_to_temp  # noqa: E402
 
-# Suppress noisy warnings before importing heavy libs
-os.environ["PYTHONWARNINGS"] = "ignore"
-warnings.filterwarnings("ignore")
-logging.getLogger("lightning").setLevel(logging.ERROR)
-logging.getLogger("whisperx").setLevel(logging.ERROR)
-logging.getLogger("pyannote").setLevel(logging.ERROR)
+CONVERSION_TIMEOUT_SECONDS = 300
 
 app = FastAPI(
     title="Podcast Transcriber API",
     description="Transcribe audio with speaker diarization and convert audio to MP4.",
     version="0.1.0",
 )
-
-
-async def _stream_upload_to_file(file: UploadFile, tmp_path: Path) -> None:
-    """Stream uploaded file to disk in bounded chunks.
-
-    Args:
-        file: The uploaded file.
-        tmp_path: Path to write the file to.
-
-    Raises:
-        HTTPException: If upload exceeds MAX_UPLOAD_SIZE or write fails.
-    """
-    cumulative_size = 0
-    chunk_size = 1024 * 1024  # 1MB chunks
-    try:
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                cumulative_size += len(chunk)
-                if cumulative_size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
-                    )
-                f.write(chunk)
-    except HTTPException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-    except OSError as e:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
 
 @app.get("/health")
@@ -134,10 +100,7 @@ async def api_transcribe(
     token = hf_token or HF_TOKEN
 
     # Save uploaded file to temp location with bounded streaming
-    fd, tmp_file = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)  # Close fd before writing
-    tmp_path = Path(tmp_file)
-    await _stream_upload_to_file(file, tmp_path)
+    tmp_path = await save_upload_to_temp(file, suffix, MAX_UPLOAD_SIZE)
 
     try:
         # Transcribe (run in thread to avoid blocking event loop)
@@ -153,8 +116,7 @@ async def api_transcribe(
         # Format output
         transcript = format_transcript(result, output_format=output_format)
 
-        # Write to output dir
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        # write_transcript creates the output dir as needed
         output_path = write_transcript(
             transcript,
             audio_path=Path(file.filename or "upload"),
@@ -215,10 +177,7 @@ async def api_convert(
 
     # Save uploaded file with bounded streaming
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
-    os.close(fd)  # Close fd before writing
-    tmp_path = Path(tmp_file)
-    await _stream_upload_to_file(file, tmp_path)
+    tmp_path = await save_upload_to_temp(file, input_suffix, MAX_UPLOAD_SIZE)
 
     # Output path with unique filename to prevent concurrent overwrites
     stem = Path(file.filename or "output").stem
@@ -234,7 +193,7 @@ async def api_convert(
             output_path=output_path,
             output_format=output_format,
             bitrate="192k",
-            timeout_seconds=300,
+            timeout_seconds=CONVERSION_TIMEOUT_SECONDS,
         )
 
         background_tasks.add_task(output_path.unlink, missing_ok=True)

@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import podcast_transcriber.converter_service as converter_module
+import podcast_transcriber.utils.converter as converter_util
 
 
 client = TestClient(converter_module.app)
@@ -58,7 +59,7 @@ def test_convert_success_uses_requested_bitrate_and_media_type(tmp_path):
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
         patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            converter_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -102,7 +103,7 @@ def test_convert_reports_ffmpeg_stderr(tmp_path):
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
         patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            converter_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -137,7 +138,7 @@ def test_convert_prevents_concurrent_overwrites(tmp_path):
         patch.object(converter_module, "OUTPUT_DIR", tmp_path),
         patch.object(converter_module.shutil, "which", return_value="/usr/bin/ffmpeg"),
         patch.object(
-            converter_module.asyncio,
+            converter_util.asyncio,
             "create_subprocess_exec",
             side_effect=fake_create_subprocess_exec,
         ),
@@ -179,7 +180,7 @@ def test_convert_reports_timeout(tmp_path):
         )
 
     assert response.status_code == 500
-    assert response.json()["detail"] == "Conversion timed out (5 min)."
+    assert response.json()["detail"] == "Conversion timed out."
 
 
 def test_convert_rejects_oversized_upload():

@@ -78,4 +78,5 @@ async def convert_audio(
         raise TimeoutError("Conversion timed out.") from e
 
     if process.returncode != 0:
-        raise RuntimeError(f"FFmpeg conversion failed: {stderr.decode()[:500]}")
+        detail = stderr.decode(errors="replace")[:500]
+        raise RuntimeError(f"FFmpeg conversion failed: {detail}")

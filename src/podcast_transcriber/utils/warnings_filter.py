@@ -2,6 +2,7 @@
 
 import logging
 import os
+import warnings
 
 
 def suppress_noisy_output() -> None:
@@ -12,6 +13,7 @@ def suppress_noisy_output() -> None:
     """
     # Suppress all warnings globally
     os.environ["PYTHONWARNINGS"] = "ignore"
+    warnings.filterwarnings("ignore")
 
     # Set noisy loggers to ERROR level to suppress info/debug output
     noisy_loggers = [

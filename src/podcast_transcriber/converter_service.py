@@ -1,9 +1,6 @@
 """Standalone FastAPI service for audio/video format conversion via FFmpeg."""
 
-import asyncio
-import os
 import shutil
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -11,54 +8,22 @@ from typing import Annotated
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from .config import MAX_UPLOAD_SIZE, OUTPUT_DIR
 from .utils.converter import (
     SUPPORTED_OUTPUT_FORMATS,
     convert_audio,
     format_supported_outputs,
     get_media_type,
 )
+from .utils.uploads import save_upload_to_temp
 
-OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
-MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024))  # 500MB default
+CONVERSION_TIMEOUT_SECONDS = 300
 
 app = FastAPI(
     title="Audio Converter API",
     description="Convert audio files between formats using FFmpeg.",
     version="0.1.0",
 )
-
-
-async def _stream_upload_to_file(file: UploadFile, tmp_path: Path) -> None:
-    """Stream uploaded file to disk in bounded chunks.
-
-    Args:
-        file: The uploaded file.
-        tmp_path: Path to write the file to.
-
-    Raises:
-        HTTPException: If upload exceeds MAX_UPLOAD_SIZE or write fails.
-    """
-    cumulative_size = 0
-    chunk_size = 1024 * 1024  # 1MB chunks
-    try:
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                cumulative_size += len(chunk)
-                if cumulative_size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes.",
-                    )
-                f.write(chunk)
-    except HTTPException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-    except OSError as e:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}") from e
 
 
 @app.get("/health")
@@ -104,10 +69,7 @@ async def convert(
 
     # Save uploaded file with bounded streaming
     input_suffix = Path(file.filename or "input").suffix or ".m4a"
-    fd, tmp_file = tempfile.mkstemp(suffix=input_suffix)
-    os.close(fd)  # Close fd before writing
-    tmp_path = Path(tmp_file)
-    await _stream_upload_to_file(file, tmp_path)
+    tmp_path = await save_upload_to_temp(file, input_suffix, MAX_UPLOAD_SIZE)
 
     # Build output path with unique filename to prevent concurrent overwrites
     stem = Path(file.filename or "output").stem
@@ -123,7 +85,7 @@ async def convert(
             output_path=output_path,
             output_format=output_format,
             bitrate=audio_bitrate,
-            timeout_seconds=300,
+            timeout_seconds=CONVERSION_TIMEOUT_SECONDS,
         )
 
         background_tasks.add_task(output_path.unlink, missing_ok=True)
@@ -138,9 +100,7 @@ async def convert(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
     except TimeoutError as e:
-        raise HTTPException(
-            status_code=500, detail="Conversion timed out (5 min)."
-        ) from e
+        raise HTTPException(status_code=500, detail="Conversion timed out.") from e
 
     finally:
         tmp_path.unlink(missing_ok=True)
