@@ -18,11 +18,9 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
-# Copy source code early (required for package discovery)
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+RUN uv sync --no-dev --no-install-project
 COPY --chown=appuser:appuser src/ src/
-COPY --chown=appuser:appuser pyproject.toml .
-
-# Install Python dependencies with uv (no dev deps)
 RUN uv sync --no-dev && uv cache prune
 
 # Create output directory for mounted volumes
@@ -49,11 +47,9 @@ CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8
 # ========== CONVERTER TARGET ==========
 FROM base AS converter
 
-# Copy source code early (required for package discovery)
-COPY --chown=appuser:appuser src/ src/
 COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
-
-# Install Python dependencies with uv (no dev deps)
+RUN uv sync --no-dev --no-install-project
+COPY --chown=appuser:appuser src/ src/
 RUN uv sync --no-dev && uv cache prune
 
 # Create output directory for mounted volumes
