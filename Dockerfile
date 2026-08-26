@@ -1,4 +1,6 @@
-FROM python:3.11-slim AS base
+# Pinned to linux/amd64: torch/torchaudio/torchcodec only publish wheels for
+# amd64 (no linux/arm64 wheels), so ARM hosts must build via emulation.
+FROM --platform=linux/amd64 python:3.11-slim AS base
 
 # Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,11 +20,13 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
-COPY --chown=appuser:appuser src/ src/
-COPY --chown=appuser:appuser pyproject.toml .
+# Install dependencies first (cached layer) using the frozen lockfile,
+# then copy source and install the project itself.
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-# Install Python dependencies with uv (no dev deps)
-RUN uv sync --no-dev && uv cache prune
+COPY --chown=appuser:appuser src/ src/
+RUN uv sync --frozen --no-dev && uv cache prune
 
 # Create output directory for mounted volumes
 RUN mkdir -p /app/output && chown appuser:appuser /app/output
@@ -40,25 +44,28 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER appuser
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status == 200 else 1)"
 
 CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ========== CONVERTER TARGET ==========
 FROM base AS converter
 
-COPY --chown=appuser:appuser src/ src/
+# The converter pyproject declares only third-party deps (no local package
+# build config), so install deps without the project and import the copied
+# source via PYTHONPATH.
 COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
+RUN uv sync --no-dev --no-install-project && uv cache prune
 
-# Install Python dependencies with uv (no dev deps)
-RUN uv sync --no-dev && uv cache prune
+COPY --chown=appuser:appuser src/ src/
 
 # Create output directory for mounted volumes
 RUN mkdir -p /app/output && chown appuser:appuser /app/output
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HOST=0.0.0.0 \
@@ -68,7 +75,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER appuser
 EXPOSE 8001
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=5).status == 200 else 1)"
 
 CMD ["uvicorn", "podcast_transcriber.converter_service:app", "--host", "0.0.0.0", "--port", "8001"]
