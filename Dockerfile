@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.11-slim AS base
+FROM python:3.11-slim AS base
 
 # Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
