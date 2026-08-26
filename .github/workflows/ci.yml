@@ -35,3 +35,58 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  docker-smoke:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build converter image
+        run: docker build --target converter -t podcast-converter:ci .
+
+      - name: Build transcriber image
+        run: docker build --target transcriber -t podcast-transcriber:ci .
+
+      # The converter is lightweight (no ML models), so we can fully boot it
+      # and probe /health to catch import/startup regressions.
+      - name: Smoke test converter service
+        run: |
+          docker run -d --name converter -p 8001:8001 podcast-converter:ci
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8001/health; then
+              echo "converter healthy"; ok=1; break
+            fi
+            echo "waiting for converter... ($i)"; sleep 2
+          done
+          docker logs converter
+          docker rm -f converter
+          if [ "${ok:-0}" != "1" ]; then
+            echo "::error::converter /health never became ready"; exit 1
+          fi
+
+      # The transcriber image loads heavy ML deps (torch, whisperx, pyannote)
+      # at import time, which is slow and fragile in CI. Rather than importing
+      # the app, verify the package is installed and its console entrypoints
+      # resolve - this catches packaging / ModuleNotFoundError regressions
+      # without executing the ML import chain.
+      - name: Smoke test transcriber packaging
+        run: |
+          docker run --rm --entrypoint python podcast-transcriber:ci -c "
+          import importlib.util, importlib.metadata, sys
+          # Package and its submodules must be importable as files.
+          for mod in (
+              'podcast_transcriber',
+              'podcast_transcriber.api',
+              'podcast_transcriber.converter_service',
+          ):
+              if importlib.util.find_spec(mod) is None:
+                  sys.exit(f'missing module: {mod}')
+          # Console entrypoints declared in pyproject must be registered.
+          scripts = {ep.name for ep in importlib.metadata.entry_points(group='console_scripts')}
+          for name in ('transcribe', 'transcribe-api'):
+              if name not in scripts:
+                  sys.exit(f'missing console script: {name}')
+          print('transcriber packaging OK')
+          "
