@@ -1,0 +1,15 @@
+[project]
+name = "podcast-converter"
+version = "0.1.0"
+description = "Audio format converter service"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.30.6",
+    "python-multipart==0.0.17",
+    "python-dotenv==1.0.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

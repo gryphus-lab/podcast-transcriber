@@ -20,5 +20,8 @@ LANGUAGE = os.environ.get("LANGUAGE", "en")
 # Output directory
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "output"))
 
+# Maximum upload size (500MB default)
+MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 500 * 1024 * 1024))
+
 # Supported audio formats
 SUPPORTED_FORMATS = {".mp3", ".m4a", ".wav", ".flac", ".ogg", ".wma", ".aac"}

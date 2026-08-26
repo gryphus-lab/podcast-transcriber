@@ -1,0 +1,82 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: trivy
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "37 6 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan-transcriber:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    name: Scan Transcriber Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build transcriber image
+        run: |
+          docker build --target transcriber -t gryphus-lab/podcast-transcriber:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "gryphus-lab/podcast-transcriber:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-transcriber.sarif"
+          severity: "CRITICAL,HIGH"
+          scanners: "vuln"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-transcriber.sarif"
+          category: "transcriber"
+
+  scan-converter:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    name: Scan Converter Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build converter image
+        run: |
+          docker build --target converter -t gryphus-lab/podcast-converter:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "gryphus-lab/podcast-converter:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-converter.sarif"
+          severity: "CRITICAL,HIGH"
+          scanners: "vuln"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-converter.sarif"
+          category: "converter"

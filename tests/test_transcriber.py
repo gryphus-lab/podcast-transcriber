@@ -1,81 +1,184 @@
-"""Tests for WhisperX transcription orchestration."""
+"""Tests for the WhisperX transcription orchestration."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import sys
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
-from podcast_transcriber.utils import transcriber
+import podcast_transcriber.utils.transcriber as transcriber_module
 
 
-def test_transcribe_without_diarization_aligns_segments():
-    """Transcription should load audio, transcribe, and align timestamps."""
-    audio = MagicMock()
+def test_transcribe_audio_runs_whisperx_without_diarization(tmp_path, monkeypatch):
+    audio_path = tmp_path / "episode.wav"
+    audio_path.write_bytes(b"audio")
+    audio = MagicMock(name="audio")
     model = MagicMock()
-    model.transcribe.return_value = {"segments": [{"start": 0, "text": "Hi"}]}
-    aligned = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
+    model.transcribe.return_value = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
+    aligned_result = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
 
-    with (
-        patch.object(transcriber.whisperx, "load_model", return_value=model) as load_model,
-        patch.object(transcriber.whisperx, "load_audio", return_value=audio) as load_audio,
-        patch.object(
-            transcriber.whisperx,
-            "load_align_model",
-            return_value=("align_model", "metadata"),
-        ) as load_align_model,
-        patch.object(transcriber.whisperx, "align", return_value=aligned) as align,
-        patch.object(transcriber.whisperx, "assign_word_speakers") as assign_word_speakers,
-    ):
-        result = transcriber.transcribe_audio(
-            Path("podcast.m4a"),
-            model_name="medium",
-            language="de",
-            diarize=False,
-            device="cuda",
-            compute_type="float16",
-        )
-
-    assert result == aligned
-    load_model.assert_called_once_with(
-        "medium",
-        device="cuda",
-        compute_type="float16",
-        language="de",
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_model", MagicMock(return_value=model)
     )
-    load_audio.assert_called_once_with("podcast.m4a")
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_audio", MagicMock(return_value=audio)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "load_align_model",
+        MagicMock(return_value=("align-model", {"lang": "en"})),
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "align", MagicMock(return_value=aligned_result)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "assign_word_speakers", MagicMock()
+    )
+
+    result = transcriber_module.transcribe_audio(
+        audio_path,
+        model_name="tiny",
+        language="en",
+        diarize=False,
+        hf_token="",
+        device="cpu",
+        compute_type="int8",
+    )
+
+    assert result == aligned_result
+    transcriber_module.whisperx.load_model.assert_called_once_with(
+        "tiny", device="cpu", compute_type="int8", language="en"
+    )
+    transcriber_module.whisperx.load_audio.assert_called_once_with(str(audio_path))
     model.transcribe.assert_called_once_with(audio, batch_size=16)
-    load_align_model.assert_called_once_with(language_code="de", device="cuda")
-    align.assert_called_once_with(
-        [{"start": 0, "text": "Hi"}],
-        "align_model",
-        "metadata",
+    transcriber_module.whisperx.align.assert_called_once_with(
+        [{"start": 0, "end": 1, "text": "Hi"}],
+        "align-model",
+        {"lang": "en"},
         audio,
-        "cuda",
+        "cpu",
         return_char_alignments=False,
     )
-    assign_word_speakers.assert_not_called()
+    transcriber_module.whisperx.assign_word_speakers.assert_not_called()
 
 
-def test_transcribe_raises_when_diarization_pipeline_cannot_load():
-    """A missing pyannote pipeline should produce a clear runtime error."""
-    audio = MagicMock()
+def test_transcribe_audio_assigns_speakers_when_token_is_available(
+    tmp_path, monkeypatch
+):
+    audio_path = tmp_path / "episode.wav"
+    audio_path.write_bytes(b"audio")
+    audio = MagicMock(name="audio")
+    waveform = MagicMock(name="waveform")
+    diarization_result = SimpleNamespace(
+        itertracks=lambda yield_label: [
+            (SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00")
+        ]
+    )
+    pipeline = MagicMock()
+    pipeline.to.return_value = pipeline
+    pipeline.return_value = diarization_result
+    pipeline_cls = MagicMock()
+    pipeline_cls.from_pretrained.return_value = pipeline
+
+    model = MagicMock()
+    model.transcribe.return_value = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
+    aligned_result = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
+    speaker_result = {
+        "segments": [{"start": 0, "end": 1, "text": "Hi", "speaker": "SPEAKER_00"}]
+    }
+
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_model", MagicMock(return_value=model)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_audio", MagicMock(return_value=audio)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "load_align_model",
+        MagicMock(return_value=("align-model", {})),
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "align", MagicMock(return_value=aligned_result)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "assign_word_speakers",
+        MagicMock(return_value=speaker_result),
+    )
+    monkeypatch.setattr(
+        transcriber_module.torch,
+        "from_numpy",
+        MagicMock(return_value=SimpleNamespace(unsqueeze=lambda dim: waveform)),
+    )
+    monkeypatch.setattr(
+        transcriber_module.torch, "device", MagicMock(return_value="cpu-device")
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "pyannote.audio",
+        SimpleNamespace(Pipeline=pipeline_cls),
+    )
+
+    result = transcriber_module.transcribe_audio(
+        audio_path,
+        diarize=True,
+        hf_token="hf_token",
+        device="cpu",
+    )
+
+    assert result == speaker_result
+    pipeline_cls.from_pretrained.assert_called_once_with(
+        "pyannote/speaker-diarization-3.1", token="hf_token"
+    )
+    pipeline.to.assert_called_once_with("cpu-device")
+    pipeline.assert_called_once_with({"waveform": waveform, "sample_rate": 16000})
+    transcriber_module.whisperx.assign_word_speakers.assert_called_once()
+    diarize_segments = transcriber_module.whisperx.assign_word_speakers.call_args.args[0]
+    assert list(diarize_segments.to_dict("records")) == [
+        {"start": 0.0, "end": 1.5, "speaker": "SPEAKER_00"}
+    ]
+
+
+def test_transcribe_audio_raises_when_diarization_model_cannot_load(
+    tmp_path, monkeypatch
+):
+    audio_path = tmp_path / "episode.wav"
+    audio_path.write_bytes(b"audio")
+    pipeline_cls = MagicMock()
+    pipeline_cls.from_pretrained.return_value = None
+
     model = MagicMock()
     model.transcribe.return_value = {"segments": []}
 
-    with (
-        patch.object(transcriber.whisperx, "load_model", return_value=model),
-        patch.object(transcriber.whisperx, "load_audio", return_value=audio),
-        patch.object(
-            transcriber.whisperx,
-            "load_align_model",
-            return_value=("align_model", "metadata"),
-        ),
-        patch.object(transcriber.whisperx, "align", return_value={"segments": []}),
-        patch("pyannote.audio.Pipeline.from_pretrained", return_value=None),
-        pytest.raises(RuntimeError, match="Failed to load pyannote diarization model"),
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_model", MagicMock(return_value=model)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_audio", MagicMock(return_value=MagicMock())
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "load_align_model",
+        MagicMock(return_value=("align-model", {})),
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "align",
+        MagicMock(return_value={"segments": []}),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "pyannote.audio",
+        SimpleNamespace(Pipeline=pipeline_cls),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="Failed to load pyannote diarization model"
     ):
-        transcriber.transcribe_audio(
-            Path("podcast.m4a"),
+        transcriber_module.transcribe_audio(
+            audio_path,
             diarize=True,
             hf_token="hf_token",
+            device="cpu",
         )
