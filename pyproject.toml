@@ -5,6 +5,7 @@ description = "Podcast transcription CLI and API with speaker diarization using 
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "whisperx>=3.1.1",
+    "torch>=2.4.0",
     "torchaudio<2.3.0",
     "python-dotenv>=1.0.0",
     "rich>=13.7.0",
