@@ -7,6 +7,9 @@ dependencies = [
     "whisperx>=3.1.1",
     "torch>=2.4.0,<2.5",
     "torchaudio>=2.4.0,<2.5",
+    # transformers 5.x requires torch>=2.5; cap to the 4.x line that works
+    # with the torch 2.4 pin above (kept for pyannote/torchaudio compatibility).
+    "transformers>=4.44,<5",
     "python-dotenv>=1.0.0",
     "rich>=13.7.0",
     "fastapi>=0.115.0",

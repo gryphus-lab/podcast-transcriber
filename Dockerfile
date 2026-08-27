@@ -20,6 +20,11 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
+# execstack is needed to clear the executable-stack flag on the ctranslate2
+# shared library (see the RUN step below).
+RUN apt-get update && apt-get install -y --no-install-recommends execstack \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first (cached layer) using the frozen lockfile,
 # then copy source and install the project itself.
 COPY --chown=appuser:appuser pyproject.toml uv.lock ./
@@ -27,6 +32,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chown=appuser:appuser src/ src/
 RUN uv sync --frozen --no-dev && uv cache prune
+
+# ctranslate2's bundled .so requests an executable stack, which the loader
+# refuses under emulated/hardened runtimes ("cannot enable executable stack").
+# Clear the flag so `import ctranslate2` (via whisperx) works.
+RUN find /app/.venv -name "libctranslate2*.so*" -exec execstack -c {} \; || true
 
 # Create output directory for mounted volumes
 RUN mkdir -p /app/output && chown appuser:appuser /app/output
