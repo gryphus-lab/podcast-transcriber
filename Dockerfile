@@ -55,13 +55,12 @@ CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8
 FROM base AS converter
 
 COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
-COPY --chown=appuser:appuser uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project
 
 COPY --chown=appuser:appuser src/ src/
 
 # Install Python dependencies with uv (no dev deps)
-RUN uv sync --frozen --no-dev && uv cache prune
+RUN uv sync --no-dev && uv cache prune
 
 # Clear executable stack flag on ctranslate2 for ARM64 compatibility
 RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
