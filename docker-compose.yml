@@ -13,12 +13,6 @@ services:
       - OUTPUT_DIR=/app/output
     volumes:
       - transcriber-output:/app/output
-    # ctranslate2's shared library requests an executable stack, which the
-    # default seccomp profile blocks under emulated amd64 (Rosetta/QEMU),
-    # causing "cannot enable executable stack" at import. Disabling the
-    # seccomp filter allows the required mprotect syscall.
-    security_opt:
-      - seccomp=unconfined
     deploy:
       resources:
         limits:

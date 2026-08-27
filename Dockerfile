@@ -20,9 +20,11 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
-# execstack is needed to clear the executable-stack flag on the ctranslate2
-# shared library (see the RUN step below).
-RUN apt-get update && apt-get install -y --no-install-recommends execstack \
+# patchelf is needed to clear the executable-stack flag on the ctranslate2
+# shared library (see the RUN step below). The execstack package has been
+# removed from Debian (see https://tracker.debian.org/pkg/prelink), so
+# patchelf's --clear-execstack is used instead.
+RUN apt-get update && apt-get install -y --no-install-recommends patchelf \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (cached layer) using the frozen lockfile,
@@ -36,7 +38,7 @@ RUN uv sync --frozen --no-dev && uv cache prune
 # ctranslate2's bundled .so requests an executable stack, which the loader
 # refuses under emulated/hardened runtimes ("cannot enable executable stack").
 # Clear the flag so `import ctranslate2` (via whisperx) works.
-RUN find /app/.venv -name "libctranslate2*.so*" -exec execstack -c {} \; || true
+RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
 
 # Create output directory for mounted volumes
 RUN mkdir -p /app/output && chown appuser:appuser /app/output
