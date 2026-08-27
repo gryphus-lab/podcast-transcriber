@@ -13,10 +13,6 @@ services:
       - OUTPUT_DIR=/app/output
     volumes:
       - transcriber-output:/app/output
-    security_opt:
-      - "apparmor=unconfined"
-    cap_add:
-      - SYS_PTRACE
     deploy:
       resources:
         limits:
@@ -33,10 +29,6 @@ services:
       - OUTPUT_DIR=/app/output
     volumes:
       - converter-output:/app/output
-    security_opt:
-      - "apparmor=unconfined"
-    cap_add:
-      - SYS_PTRACE
 
 volumes:
   transcriber-output:

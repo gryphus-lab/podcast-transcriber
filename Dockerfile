@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS base
+FROM python:3.11-slim-trixie AS base
 
 # Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,11 +19,13 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
 COPY --chown=appuser:appuser src/ src/
-COPY --chown=appuser:appuser pyproject.toml .
 
 # Install Python dependencies with uv (no dev deps)
-RUN uv sync --no-dev && uv cache prune
+RUN uv sync --frozen --no-dev && uv cache prune
 
 # Clear executable stack flag on ctranslate2 for ARM64 compatibility
 RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
@@ -52,11 +54,14 @@ CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8
 # ========== CONVERTER TARGET ==========
 FROM base AS converter
 
-COPY --chown=appuser:appuser src/ src/
 COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
+COPY --chown=appuser:appuser uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY --chown=appuser:appuser src/ src/
 
 # Install Python dependencies with uv (no dev deps)
-RUN uv sync --no-dev && uv cache prune
+RUN uv sync --frozen --no-dev && uv cache prune
 
 # Clear executable stack flag on ctranslate2 for ARM64 compatibility
 RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
