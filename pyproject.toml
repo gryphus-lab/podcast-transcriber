@@ -9,7 +9,7 @@ dependencies = [
     "torchaudio>=2.4.0,<2.5",
     # transformers 5.x requires torch>=2.5; cap to the 4.x line that works
     # with the torch 2.4 pin above (kept for pyannote/torchaudio compatibility).
-    "transformers>=5.5.0,<6",
+    "transformers>=5.10.1,<6",
     "matplotlib>=3.8.0",
     "python-dotenv>=1.0.0",
     "rich>=13.7.0",
