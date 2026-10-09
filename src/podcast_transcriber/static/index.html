@@ -297,7 +297,7 @@ async function refreshJobs() {
     for (const link of body.querySelectorAll("a[data-job]")) {
       link.addEventListener("click", (ev) => {
         ev.preventDefault();
-        showTranscript(link.getAttribute("data-job"));
+        showTranscript(link.dataset.job);
       });
     }
   } catch {

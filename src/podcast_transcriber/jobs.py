@@ -141,14 +141,14 @@ class JobStore:
                 error=str(exc),
                 finished_at=_now(),
             )
-            logger.error("Job %s failed: %s", job.id, exc)
+            logger.exception("Job %s failed", job.id)
 
         if on_complete is not None:
             # Never let a callback failure crash the worker thread.
             try:
                 on_complete(self.get(job.id))
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Job %s on_complete hook failed: %s", job.id, exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("Job %s on_complete hook failed", job.id)
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)

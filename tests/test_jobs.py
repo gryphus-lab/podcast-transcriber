@@ -62,7 +62,8 @@ def test_store_list_newest_first():
 
     listed = store.list()
     ids = [j.id for j in listed]
-    assert j1.id in ids and j2.id in ids
+    assert j1.id in ids
+    assert j2.id in ids
     # Newest first: j2 was created after j1.
     assert ids.index(j2.id) <= ids.index(j1.id)
     store.shutdown()

@@ -168,8 +168,8 @@ def _on_memory_job_complete(job: Job, job_id: str) -> None:
     if job.status.value == "done" and job.result is not None:
         try:
             job.result_file = persist_transcript(job_id, job.result)
-        except Exception as exc:  # noqa: BLE001 - best-effort persistence
-            logger.error("Job %s transcript persistence failed: %s", job_id, exc)
+        except Exception:  # noqa: BLE001 - best-effort persistence
+            logger.exception("Job %s transcript persistence failed", job_id)
 
     if job.callback_url:
         _deliver_callback(job)
@@ -187,5 +187,5 @@ def _deliver_callback(job: Job) -> None:
     try:
         with httpx.Client(timeout=15.0) as client:
             client.post(job.callback_url, json=payload)
-    except Exception as exc:  # noqa: BLE001 - best-effort webhook
-        logger.error("Callback POST to %s failed: %s", job.callback_url, exc)
+    except Exception:  # noqa: BLE001 - best-effort webhook
+        logger.exception("Callback POST to %s failed", job.callback_url)

@@ -92,8 +92,8 @@ def _post_callback(url: str, payload: dict) -> None:
     try:
         with httpx.Client(timeout=_CALLBACK_TIMEOUT_S) as client:
             client.post(url, json=payload)
-    except Exception as exc:  # noqa: BLE001 - best-effort webhook
-        logger.error("Callback POST to %s failed: %s", url, exc)
+    except Exception:  # noqa: BLE001 - best-effort webhook
+        logger.exception("Callback POST to %s failed", url)
 
 
 # ---------------------------------------------------------------------------

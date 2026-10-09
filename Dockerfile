@@ -1,4 +1,8 @@
-FROM python:3.11-slim-trixie AS base
+# Pull the official Python image from the AWS ECR Public mirror rather than
+# Docker Hub: anonymous Docker Hub pulls are rate-limited (HTTP 429) in CI,
+# which intermittently fails the image builds. ECR Public mirrors the same
+# official images without anonymous pull limits.
+FROM public.ecr.aws/docker/library/python:3.11-slim-trixie AS base
 
 # Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
