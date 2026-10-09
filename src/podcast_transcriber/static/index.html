@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Podcast Transcriber</title>
+<style>
+  :root {
+    --black: #161616;
+    --white: #ffffff;
+    --grey: #f4f4f4;
+    --yellow: #ffe600;
+    --line: #e3e3e3;
+    --muted: #6b6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Chip Text', system-ui, -apple-system, sans-serif;
+    color: var(--black);
+    background: var(--white);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--black);
+    color: var(--white);
+    padding: 20px 24px;
+  }
+  header .eyebrow {
+    font-family: 'Chip Mono', ui-monospace, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    color: var(--yellow);
+    margin: 0 0 4px;
+  }
+  header h1 { font-family: 'Chip Display', system-ui, sans-serif; font-size: 24px; margin: 0; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    background: var(--white);
+  }
+  h2 { font-family: 'Chip Display', system-ui, sans-serif; font-size: 18px; margin: 0 0 16px; }
+  form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  label { font-size: 13px; font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+  input[type="text"], input[type="url"], input[type="file"], select {
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit;
+    background: var(--white);
+  }
+  .checks { display: flex; flex-wrap: wrap; gap: 18px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+  .actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: 0;
+    border-radius: 9999px;
+    padding: 11px 22px;
+    cursor: pointer;
+    background: var(--yellow);
+    color: var(--black);
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #formMsg { font-size: 13px; }
+  #formMsg.error { color: #b00020; }
+  #formMsg.ok { color: #0a7d33; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: 'Chip Mono', ui-monospace, monospace; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; color: var(--muted); }
+  td.job-id { font-family: 'Chip Mono', ui-monospace, monospace; font-size: 12px; }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .pill.pending { background: var(--grey); color: var(--muted); }
+  .pill.running { background: #fff6a8; color: #6b5e00; }
+  .pill.done { background: #d8f5e0; color: #0a7d33; }
+  .pill.error { background: #fde0e3; color: #b00020; }
+  a.result-link { color: var(--black); font-weight: 600; text-underline-offset: 2px; }
+  .empty { color: var(--muted); font-style: italic; }
+  .row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .row-head h2 { margin: 0; }
+  .refresh-note { font-size: 12px; color: var(--muted); }
+  #transcript {
+    white-space: pre-wrap;
+    font-family: 'Chip Mono', ui-monospace, monospace;
+    font-size: 13px;
+    background: var(--grey);
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 420px;
+    overflow: auto;
+    margin: 0;
+  }
+  #transcriptCard { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Podcast Transcriber</p>
+  <h1>Transcription console</h1>
+</header>
+
+<main>
+  <section class="card">
+    <h2>New transcription</h2>
+    <form id="jobForm">
+      <div class="field full">
+        <label for="file">Audio file</label>
+        <input type="file" id="file" name="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.wma,.aac" required />
+      </div>
+      <div class="field">
+        <label for="model">Whisper model</label>
+        <input type="text" id="model" name="model" value="large-v3" />
+      </div>
+      <div class="field">
+        <label for="language">Language <span class="hint">(ISO 639-1)</span></label>
+        <input type="text" id="language" name="language" value="en" />
+      </div>
+      <div class="field">
+        <label for="output_format">Output format</label>
+        <select id="output_format" name="output_format">
+          <option value="txt">txt</option>
+          <option value="srt">srt</option>
+          <option value="json">json</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="hf_token">HuggingFace token <span class="hint">(optional)</span></label>
+        <input type="text" id="hf_token" name="hf_token" placeholder="for diarization" />
+      </div>
+      <div class="field full">
+        <label for="callback_url">Callback webhook URL <span class="hint">(optional)</span></label>
+        <input type="url" id="callback_url" name="callback_url" placeholder="https://example.com/hook" />
+      </div>
+      <div class="field full">
+        <div class="checks">
+          <span class="check"><input type="checkbox" id="diarize" name="diarize" checked /> <label for="diarize">Speaker diarization</label></span>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" id="submitBtn">Start transcription</button>
+        <span id="formMsg"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="row-head">
+      <h2>Jobs</h2>
+      <span class="refresh-note">Auto-refreshes every 3s</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Job</th><th>File</th><th>Format</th><th>Status</th><th>Result</th><th>Created</th><th>Finished</th>
+        </tr>
+      </thead>
+      <tbody id="jobsBody">
+        <tr><td colspan="7" class="empty">No jobs yet.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="transcriptCard">
+    <div class="row-head">
+      <h2 id="transcriptTitle">Transcript</h2>
+      <button type="button" id="closeTranscript">Close</button>
+    </div>
+    <pre id="transcript"></pre>
+  </section>
+</main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+
+function setMsg(text, cls) {
+  const el = $("formMsg");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+$("jobForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = $("submitBtn");
+  const fileInput = $("file");
+  if (!fileInput.files.length) {
+    setMsg("Choose an audio file first.", "error");
+    return;
+  }
+  btn.disabled = true;
+  setMsg("Uploading and queuing...", "");
+
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  fd.append("model", $("model").value);
+  fd.append("language", $("language").value);
+  fd.append("output_format", $("output_format").value);
+  fd.append("diarize", $("diarize").checked ? "true" : "false");
+  if ($("hf_token").value.trim()) fd.append("hf_token", $("hf_token").value.trim());
+  if ($("callback_url").value.trim()) fd.append("callback_url", $("callback_url").value.trim());
+
+  try {
+    const resp = await fetch("/jobs", { method: "POST", body: fd });
+    const body = await resp.json();
+    if (resp.ok) {
+      setMsg("Job started: " + body.job_id, "ok");
+      $("jobForm").reset();
+      refreshJobs();
+    } else {
+      const detail = Array.isArray(body.detail)
+        ? body.detail.map((d) => d.msg).join("; ")
+        : body.detail || resp.statusText;
+      setMsg("Error: " + detail, "error");
+    }
+  } catch (e) {
+    setMsg("Request failed: " + e, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function fmt(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
+}
+
+function statusPill(status) {
+  return `<span class="pill ${status}">${status}</span>`;
+}
+
+function resultCell(job) {
+  if (job.result_url) {
+    return `<a class="result-link" href="#" data-job="${job.job_id}">View</a>
+            &nbsp;&middot;&nbsp;
+            <a class="result-link" href="${job.result_url}" target="_blank" rel="noopener">Download</a>`;
+  }
+  if (job.status === "error") {
+    const title = (job.error || "").replaceAll('"', "&quot;");
+    return `<span class="empty" title="${title}">failed</span>`;
+  }
+  return "—";
+}
+
+function jobRow(job) {
+  return `<tr>
+    <td class="job-id">${job.job_id.slice(0, 8)}</td>
+    <td>${job.source_name ?? "—"}</td>
+    <td>${job.output_format ?? "txt"}</td>
+    <td>${statusPill(job.status)}</td>
+    <td>${resultCell(job)}</td>
+    <td>${fmt(job.created_at)}</td>
+    <td>${fmt(job.finished_at)}</td>
+  </tr>`;
+}
+
+async function showTranscript(jobId) {
+  try {
+    const job = await fetch(`/jobs/${jobId}`).then((r) => r.json());
+    $("transcriptTitle").textContent = `Transcript — ${job.source_name ?? jobId.slice(0, 8)}`;
+    $("transcript").textContent = job.transcript ?? "(no transcript)";
+    $("transcriptCard").style.display = "block";
+    $("transcriptCard").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    setMsg("Could not load transcript: " + e, "error");
+  }
+}
+
+$("closeTranscript").addEventListener("click", () => {
+  $("transcriptCard").style.display = "none";
+});
+
+async function refreshJobs() {
+  try {
+    const jobs = await fetch("/jobs").then((r) => r.json());
+    const body = $("jobsBody");
+    if (!jobs.length) {
+      body.innerHTML = `<tr><td colspan="7" class="empty">No jobs yet.</td></tr>`;
+      return;
+    }
+    body.innerHTML = jobs.map(jobRow).join("");
+    for (const link of body.querySelectorAll("a[data-job]")) {
+      link.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        showTranscript(link.dataset.job);
+      });
+    }
+  } catch {
+    // Keep the last-rendered table on transient errors.
+  }
+}
+
+await refreshJobs();
+setInterval(refreshJobs, 3000);
+</script>
+</body>
+</html>

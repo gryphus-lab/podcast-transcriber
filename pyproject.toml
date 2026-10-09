@@ -16,6 +16,17 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
+    # Used at runtime for webhook callback delivery (job_backend / jobs_rq).
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# Durable Redis/RQ job backend. Install with: uv sync --extra rq
+# The in-process 'memory' backend (the default) needs none of these; add this
+# extra only to run with JOB_BACKEND=rq or to run an `rq worker`.
+rq = [
+    "rq>=2.0.0",
+    "redis>=5.0.0",
 ]
 
 [project.scripts]
@@ -28,6 +39,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Ship the single-page UI with the wheel.
+podcast_transcriber = ["static/*.html"]
 
 [tool.ruff]
 exclude = ["**/.venv/**", "**/tests/**", "**/build/**"]
@@ -56,5 +71,5 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.15",
-    "httpx>=0.27.0",
+    "fakeredis",
 ]

@@ -29,8 +29,8 @@ description = "Format and fix code with Ruff and Prettier"
 run = "uv run ruff format . && uv run ruff check --fix . && prettier --write ."
 
 [tasks.install]
-description = "Install dependencies using uv"
-run = "uv sync"
+description = "Install dependencies using uv (incl. the rq extra so the full test suite runs)"
+run = "uv sync --extra rq"
 
 [tasks.transcribe]
 description = "Transcribe an audio file (CLI)"
