@@ -16,6 +16,8 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
+    # Used at runtime for webhook callback delivery (job_backend / jobs_rq).
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -69,6 +71,5 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.15",
-    "httpx>=0.27.0",
     "fakeredis",
 ]
