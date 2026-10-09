@@ -19,12 +19,9 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
-# Install dependencies from the lockfile only (never the project). The app is
-# run via its module path (see CMD), so it only needs to be importable, not
-# installed - we add src/ to PYTHONPATH below, and --no-install-project keeps the
-# first-party build out of the image. Prune the cache, clear the ctranslate2
-# exec-stack flag (best-effort, scoped so it can't mask a failure) and create the
-# output dir in one layer (docker:S7031).
+# Install third-party dependencies first (own cached layer, no project yet).
+# Prune the cache, clear the ctranslate2 exec-stack flag (best-effort, scoped so
+# it can't mask a failure) and create the output dir in one layer (docker:S7031).
 #
 # docker:S8541 (--no-build) is intentionally not applied here: a required
 # transitive dependency (antlr4-python3-runtime, via whisperx) is published as a
@@ -39,9 +36,15 @@ RUN uv sync --frozen --no-dev --no-install-project \
 
 COPY --chown=appuser:appuser src/ src/
 
+# Install the first-party project so its console entrypoints (transcribe /
+# transcribe-api, declared in pyproject [project.scripts]) are registered.
+# Only the local, trusted package is built here; its dependencies were already
+# installed above. docker:S8541 (--no-build) is not applied for the same
+# first-party-build reason noted above.
+RUN uv sync --frozen --no-dev
+
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH="/app/src" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HOST=0.0.0.0 \
