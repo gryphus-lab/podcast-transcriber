@@ -1,5 +1,6 @@
 services:
   transcriber:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -19,6 +20,10 @@ services:
           memory: 8G
 
   converter:
+    restart: unless-stopped
+    depends_on:
+      transcriber:
+        condition: service_healthy
     build:
       context: .
       dockerfile: Dockerfile

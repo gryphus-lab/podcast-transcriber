@@ -66,7 +66,29 @@ jobs:
             echo "::error::converter /health never became ready"; exit 1
           fi
 
-      # The transcriber image loads heavy ML deps (torch, whisperx, pyannote)
+      - name: Compose health check
+        run: |
+          docker compose up -d --pull always
+          trap 'docker compose down --remove-orphans' EXIT
+          for service in transcriber converter; do
+            ok=0
+            for i in $(seq 1 60); do
+              if curl -fsS "http://localhost:$([ "$service" = transcriber ] && echo 8000 || echo 8001)/health"; then
+                echo "$service healthy"
+                ok=1
+                break
+              fi
+              echo "waiting for $service... ($i)"
+              sleep 2
+            done
+            if [ "$ok" != "1" ]; then
+              docker compose ps
+              docker compose logs "$service"
+              echo "::error::$service /health never became ready"
+              exit 1
+            fi
+          done
+
       # at import time, which is slow and fragile in CI. Rather than importing
       # the app, verify the package is installed and its console entrypoints
       # resolve - this catches packaging / ModuleNotFoundError regressions
