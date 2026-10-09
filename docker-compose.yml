@@ -12,8 +12,14 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
       - LANGUAGE=${LANGUAGE:-en}
       - OUTPUT_DIR=/app/output
+      - JOBS_DIR=/app/jobs
+      # Async job backend: 'memory' (default) or 'rq'. The rq profile below
+      # provides Redis + a worker; set JOB_BACKEND=rq to use them.
+      - JOB_BACKEND=${JOB_BACKEND:-memory}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - transcriber-output:/app/output
+      - transcriber-jobs:/app/jobs
     deploy:
       resources:
         limits:
@@ -35,6 +41,61 @@ services:
     volumes:
       - converter-output:/app/output
 
+  # ---- Durable async job backend (optional) -----------------------------
+  # Enabled with the `rq` profile:  docker compose --profile rq up --build
+  # Start the stack with JOB_BACKEND=rq so the transcriber enqueues to Redis.
+  redis:
+    image: redis:7-alpine
+    profiles: ["rq"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rq-worker:
+    profiles: ["rq"]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: transcriber
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+      - LANGUAGE=${LANGUAGE:-en}
+      - OUTPUT_DIR=/app/output
+      - JOBS_DIR=/app/jobs
+      - JOB_BACKEND=rq
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # Share the staged inputs + outputs with the API so the worker can read
+      # uploads and the API can serve the transcripts it writes.
+      - transcriber-output:/app/output
+      - transcriber-jobs:/app/jobs
+    # The base image doesn't bake the optional rq extra; uv adds it at launch.
+    command:
+      [
+        "uv",
+        "run",
+        "--extra",
+        "rq",
+        "rq",
+        "worker",
+        "--url",
+        "redis://redis:6379/0",
+        "transcriptions",
+      ]
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
 volumes:
   transcriber-output:
+  transcriber-jobs:
   converter-output:

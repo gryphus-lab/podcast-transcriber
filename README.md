@@ -151,6 +151,59 @@ curl -X POST http://localhost:8000/convert \
   -o my_podcast.mp4
 ```
 
+### Web console & async jobs
+
+Transcription can take minutes, so the service also exposes an **async job**
+flow and a small single-page **web console** at `http://localhost:8000/`:
+upload an audio file, watch the live jobs table (auto-refreshing), and view or
+download each finished transcript.
+
+Async endpoints:
+
+- `POST /jobs` - upload audio + options; returns `202` with a `job_id`.
+- `GET /jobs` - list all jobs (running + completed), newest first.
+- `GET /jobs/{job_id}` - poll status; includes the transcript when done.
+- `GET /jobs/{job_id}/result` - download the saved transcript file.
+- `GET /api` - service banner (active job backend).
+
+```bash
+# Submit (returns 202 Accepted + job id)
+curl -X POST http://localhost:8000/jobs \
+  -F "file=@my_podcast.m4a" -F "output_format=srt"
+# -> {"job_id": "ab12...", "status": "pending", "status_url": "/jobs/ab12..."}
+
+# Poll until done
+curl http://localhost:8000/jobs/ab12...
+# -> {"status": "running", ...}  then  {"status": "done", "transcript": "..."}
+```
+
+Pass a `callback_url` form field to receive the finished job via webhook
+instead of polling.
+
+#### Job backends (`JOB_BACKEND`)
+
+Jobs run on one of two interchangeable backends; the API behaves identically
+either way (submit / poll / callback).
+
+- `memory` (default) - in-process thread pool. Zero dependencies, no broker.
+  Great for local/dev and a single instance. Jobs are lost on restart.
+- `rq` - durable, out-of-process queue backed by Redis + [RQ](https://python-rq.org/),
+  a lightweight, JobRunr-style option. Jobs persist in Redis and run in
+  separate worker processes, so they survive API restarts and scale across
+  workers. Requires the `rq` extra.
+
+```bash
+# install the extra
+uv sync --extra rq
+
+# run Redis (e.g. docker run -p 6379:6379 redis:7), then start the API + a worker
+JOB_BACKEND=rq REDIS_URL=redis://localhost:6379/0 uv run transcribe-api &
+JOB_BACKEND=rq uv run rq worker --url redis://localhost:6379/0 transcriptions
+
+# or bring up the whole rq stack with Docker Compose
+docker compose --profile rq up --build
+```
+
 ### Docker
 
 Two services are built from a single multi-stage `Dockerfile`:

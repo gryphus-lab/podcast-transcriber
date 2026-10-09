@@ -18,6 +18,15 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+# Durable Redis/RQ job backend. Install with: uv sync --extra rq
+# The in-process 'memory' backend (the default) needs none of these; add this
+# extra only to run with JOB_BACKEND=rq or to run an `rq worker`.
+rq = [
+    "rq>=2.0.0",
+    "redis>=5.0.0",
+]
+
 [project.scripts]
 transcribe = "podcast_transcriber.__main__:main"
 transcribe-api = "podcast_transcriber.api:start"
@@ -28,6 +37,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Ship the single-page UI with the wheel.
+podcast_transcriber = ["static/*.html"]
 
 [tool.ruff]
 exclude = ["**/.venv/**", "**/tests/**", "**/build/**"]
