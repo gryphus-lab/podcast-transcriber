@@ -128,10 +128,11 @@ def main() -> int:
             hf_token=args.hf_token,
         )
 
-        # Format and write output
+        # Format and write output. write_transcript() resolves and confines the
+        # output path (creating the directory as needed), so the untrusted
+        # --output-dir value is validated there rather than used directly here.
         transcript = format_transcript(result, output_format=args.format)
 
-        args.output_dir.mkdir(parents=True, exist_ok=True)
         output_path = write_transcript(
             transcript,
             audio_path=args.audio_file,

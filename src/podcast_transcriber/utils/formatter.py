@@ -43,9 +43,24 @@ def write_transcript(
 
     Returns:
         Path to the written file.
+
+    Raises:
+        ValueError: If the resolved output path would escape ``output_dir``
+            (e.g. via a crafted file name), guarding against path traversal.
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{audio_path.stem}.{output_format}"
+    base_dir = output_dir.resolve()
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    # Derive the file name from the audio stem only - strip any directory
+    # components so a crafted name (e.g. "../../etc/passwd") cannot escape the
+    # output directory. Path(...).name keeps the final component without separators.
+    safe_stem = Path(audio_path.stem).name
+    output_path = (base_dir / f"{safe_stem}.{output_format}").resolve()
+
+    # Defence in depth: confirm the resolved target is inside the output dir.
+    if not output_path.is_relative_to(base_dir):
+        raise ValueError(f"Refusing to write outside output directory: {output_path}")
+
     output_path.write_text(transcript, encoding="utf-8")
     return output_path
 
@@ -85,10 +100,14 @@ def _format_srt(segments: Sequence[Segment]) -> str:
             continue
 
         speaker_prefix = f"[{speaker}] " if speaker else ""
-        lines.append(f"{i}")
-        lines.append(f"{start} --> {end}")
-        lines.append(f"{speaker_prefix}{text}")
-        lines.append("")
+        lines.extend(
+            (
+                f"{i}",
+                f"{start} --> {end}",
+                f"{speaker_prefix}{text}",
+                "",
+            )
+        )
 
     return "\n".join(lines)
 

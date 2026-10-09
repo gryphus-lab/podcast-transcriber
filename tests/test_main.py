@@ -169,7 +169,9 @@ class TestMainSuccessPath:
         # The spinner/status context manager must no longer be used.
         mock_status.assert_not_called()
 
-    def test_creates_output_dir_if_missing(self, tmp_path):
+    def test_delegates_output_dir_to_write_transcript(self, tmp_path):
+        # main() no longer creates the directory itself; it passes --output-dir
+        # through to write_transcript, which resolves/confines and creates it.
         output_dir = tmp_path / "nested" / "output"
         args = _make_args(output_dir=output_dir)
 
@@ -182,12 +184,12 @@ class TestMainSuccessPath:
             patch.object(main_module, "format_transcript", return_value=""),
             patch.object(
                 main_module, "write_transcript", return_value=output_dir / "podcast.txt"
-            ),
+            ) as mock_write,
         ):
             exit_code = main_module.main()
 
         assert exit_code == 0
-        assert output_dir.exists()
+        assert mock_write.call_args.kwargs["output_dir"] == output_dir
 
 
 class TestMainValidationFailure:
