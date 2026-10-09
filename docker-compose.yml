@@ -27,9 +27,11 @@ services:
 
   converter:
     restart: unless-stopped
-    depends_on:
-      transcriber:
-        condition: service_healthy
+    # No depends_on the transcriber: the converter is an independent service
+    # (standalone audio-format conversion on :8001) and never calls the
+    # transcriber. Coupling its startup to the transcriber's slow ML-stack boot
+    # via `condition: service_healthy` made `docker compose up` abort before the
+    # transcriber could finish loading.
     build:
       context: .
       dockerfile: Dockerfile
