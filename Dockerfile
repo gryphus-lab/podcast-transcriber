@@ -19,19 +19,29 @@ RUN useradd --create-home appuser
 # ========== TRANSCRIBER TARGET ==========
 FROM base AS transcriber
 
+# Install third-party dependencies first (own cached layer, no project yet).
+# Prune the cache, clear the ctranslate2 exec-stack flag (best-effort, scoped so
+# it can't mask a failure) and create the output dir in one layer (docker:S7031).
+#
+# docker:S8541 (--no-build) is intentionally not applied here: a required
+# transitive dependency (antlr4-python3-runtime, via whisperx) is published as a
+# source distribution only, so a source build is unavoidable. The build inputs
+# come from the pinned lockfile, so this is safe.
 COPY --chown=appuser:appuser pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project \
+    && uv cache prune \
+    && { find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true; } \
+    && mkdir -p /app/output \
+    && chown appuser:appuser /app/output
 
 COPY --chown=appuser:appuser src/ src/
 
-# Install Python dependencies with uv (no dev deps)
-RUN uv sync --frozen --no-dev && uv cache prune
-
-# Clear executable stack flag on ctranslate2 for ARM64 compatibility
-RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
-
-# Create output directory for mounted volumes
-RUN mkdir -p /app/output && chown appuser:appuser /app/output
+# Install the first-party project so its console entrypoints (transcribe /
+# transcribe-api, declared in pyproject [project.scripts]) are registered.
+# Only the local, trusted package is built here; its dependencies were already
+# installed above. docker:S8541 (--no-build) is not applied for the same
+# first-party-build reason noted above.
+RUN uv sync --frozen --no-dev
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -54,22 +64,25 @@ CMD ["uvicorn", "podcast_transcriber.api:app", "--host", "0.0.0.0", "--port", "8
 # ========== CONVERTER TARGET ==========
 FROM base AS converter
 
+# Install dependencies only (never the project); the converter runs via its
+# module path (see CMD) and is imported from src/ on PYTHONPATH.
+# --no-install-project keeps the first-party build out of the image and
+# --no-build forbids dependency setup/build scripts (docker:S8541); deps ship as
+# wheels. No lockfile exists for the converter pyproject, so --frozen is not
+# used. Cache prune, exec-stack clear (best-effort, scoped) and output dir are
+# merged into one layer (docker:S7031).
 COPY --chown=appuser:appuser pyproject.converter.toml pyproject.toml
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project --no-build \
+    && uv cache prune \
+    && { find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true; } \
+    && mkdir -p /app/output \
+    && chown appuser:appuser /app/output
 
 COPY --chown=appuser:appuser src/ src/
 
-# Install Python dependencies with uv (no dev deps)
-RUN uv sync --no-dev && uv cache prune
-
-# Clear executable stack flag on ctranslate2 for ARM64 compatibility
-RUN find /app/.venv -name "libctranslate2*.so*" -exec patchelf --clear-execstack {} \; || true
-
-# Create output directory for mounted volumes
-RUN mkdir -p /app/output && chown appuser:appuser /app/output
-
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HOST=0.0.0.0 \
