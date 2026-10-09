@@ -103,3 +103,12 @@ class TestWriteTranscript:
         assert output_path.exists()
         assert output_path.name == "my_podcast.txt"
         assert output_path.read_text() == "Hello world\n"
+
+    def test_stays_within_output_dir_for_traversal_name(self, tmp_path):
+        # A crafted audio file name must not let the output escape output_dir.
+        audio_path = Path("../../../../etc/passwd.m4a")
+        output_path = write_transcript("x\n", audio_path, tmp_path, "txt")
+
+        assert output_path.is_relative_to(tmp_path.resolve())
+        assert output_path.name == "passwd.txt"
+        assert output_path.parent == tmp_path.resolve()
