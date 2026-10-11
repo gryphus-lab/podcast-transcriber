@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Python dependencies managed by uv (pyproject.toml + uv.lock).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      uv:
+        patterns:
+          - "*"
+    ignore:
+      # transformers 5.x requires torch >= 2.5, but this project pins torch
+      # < 2.5 for pyannote / torchaudio compatibility. On 5.x the container
+      # fails at import with "Could not import module 'Wav2Vec2ForCTC'".
+      # Stay on the 4.x line until the torch pin can move to >= 2.5.
+      - dependency-name: "transformers"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions used by the CI workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # The Docker base images in the Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

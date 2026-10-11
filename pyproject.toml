@@ -9,6 +9,9 @@ dependencies = [
     "torchaudio>=2.4.0,<2.5",
     # transformers 5.x requires torch>=2.5; cap to the 4.x line that works
     # with the torch 2.4 pin above (kept for pyannote/torchaudio compatibility).
+    # Do NOT bump to 5.x: transformers 5 drops the torch<2.5 path and the
+    # container then fails at import with "Could not import module
+    # 'Wav2Vec2ForCTC'". A Dependabot ignore for the major keeps this < 5.
     "transformers>=4.48.0,<5",
     "matplotlib>=3.8.0",
     "python-dotenv>=1.0.0",
