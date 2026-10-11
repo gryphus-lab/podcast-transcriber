@@ -154,23 +154,20 @@ def enqueue_transcription(store, params: dict, callback_url: Optional[str]) -> J
         source_name=source_name,
         output_format=output_format,
         callback_url=callback_url,
-        on_complete=partial(_on_memory_job_complete, job_id=params["job_id"]),
+        # Persist the transcript before the job flips to `done`, so a client
+        # that polls until `done` can immediately download the result file.
+        finalize=persist_transcript,
+        on_complete=_on_memory_job_complete,
     )
 
 
-def _on_memory_job_complete(job: Job, job_id: str) -> None:
-    """Completion hook for the in-process backend.
+def _on_memory_job_complete(job: Job) -> None:
+    """Completion hook for the in-process backend: deliver the webhook.
 
-    Persists the transcript to a per-job file (recording the filename on the
-    job) and, if a callback_url was supplied, delivers the webhook. Both steps
-    are best-effort and never raise into the worker thread.
+    Transcript persistence happens in the ``finalize`` step (before the job is
+    marked done); this hook only delivers the optional webhook callback. Runs on
+    the worker thread and must never raise.
     """
-    if job.status.value == "done" and job.result is not None:
-        try:
-            job.result_file = persist_transcript(job_id, job.result)
-        except Exception:  # noqa: BLE001 - best-effort persistence
-            logger.exception("Job %s transcript persistence failed", job_id)
-
     if job.callback_url:
         _deliver_callback(job)
 
