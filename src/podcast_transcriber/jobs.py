@@ -83,12 +83,18 @@ class JobStore:
         source_name: Optional[str] = None,
         output_format: str = "txt",
         callback_url: Optional[str] = None,
+        finalize: Optional[Callable[[str, TranscriptionResult], Optional[str]]] = None,
         on_complete: Optional[Callable[[Job], None]] = None,
     ) -> Job:
         """Register a job and schedule ``work`` to run on the pool.
 
         ``work`` is a zero-arg callable (bind params with functools.partial).
-        ``on_complete`` is invoked with the finished Job (used for webhooks).
+        ``finalize(job_id, result)`` runs on a successful result and returns the
+        persisted result-file name; it executes BEFORE the status flips to
+        ``done`` so that a client polling until ``done`` can immediately fetch
+        the result (no persist-after-done race).
+        ``on_complete`` is invoked with the finished Job after the transition
+        (used for webhooks).
         """
         job = Job(
             id=uuid.uuid4().hex,
@@ -98,7 +104,7 @@ class JobStore:
         )
         with self._lock:
             self._jobs[job.id] = job
-        self._executor.submit(self._run, job, work, on_complete)
+        self._executor.submit(self._run, job, work, finalize, on_complete)
         return job
 
     def get(self, job_id: str) -> Optional[Job]:
@@ -122,15 +128,25 @@ class JobStore:
         self,
         job: Job,
         work: Callable[[], TranscriptionResult],
+        finalize: Optional[Callable[[str, TranscriptionResult], Optional[str]]],
         on_complete: Optional[Callable[[Job], None]],
     ) -> None:
         self._set(job.id, status=JobStatus.RUNNING, started_at=_now())
         try:
             result = work()
+            # Persist the result (and record its file) BEFORE flipping to done,
+            # so `done` is a reliable signal that the result is downloadable.
+            result_file: Optional[str] = None
+            if finalize is not None:
+                try:
+                    result_file = finalize(job.id, result)
+                except Exception:  # noqa: BLE001 - best-effort persistence
+                    logger.exception("Job %s result finalization failed", job.id)
             self._set(
                 job.id,
                 status=JobStatus.DONE,
                 result=result,
+                result_file=result_file,
                 finished_at=_now(),
             )
             logger.info("Job %s done (%s)", job.id, result.output_format)

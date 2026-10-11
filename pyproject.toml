@@ -5,6 +5,11 @@ description = "Podcast transcription CLI and API with speaker diarization using 
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "whisperx>=3.1.1",
+    # torch and torchaudio are a matched pair - torchaudio's compiled C++
+    # extension is built against a specific torch version. Keep both on the same
+    # minor (2.4.x); bumping torchaudio alone (e.g. to 2.11) fails at
+    # `import torchaudio` with a _torchaudio extension load error against torch
+    # 2.4. A Dependabot ignore below keeps torchaudio pinned to torch.
     "torch>=2.4.0,<2.5",
     "torchaudio>=2.4.0,<2.5",
     # transformers 5.x requires torch>=2.5; cap to the 4.x line that works
@@ -13,11 +18,11 @@ dependencies = [
     # container then fails at import with "Could not import module
     # 'Wav2Vec2ForCTC'". A Dependabot ignore for the major keeps this < 5.
     "transformers>=4.48.0,<5",
-    "matplotlib>=3.8.0",
-    "python-dotenv>=1.0.0",
+    "matplotlib>=3.11.2",
+    "python-dotenv>=1.2.4",
     "rich>=13.7.0",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
+    "fastapi>=0.143.0",
+    "uvicorn[standard]>=0.54.0",
     "python-multipart>=0.0.9",
     # Used at runtime for webhook callback delivery (job_backend / jobs_rq).
     "httpx>=0.27.0",
@@ -73,6 +78,6 @@ package = true
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "ruff>=0.15.15",
+    "ruff>=0.16.10",
     "fakeredis",
 ]
