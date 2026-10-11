@@ -16,6 +16,13 @@ updates:
       # Stay on the 4.x line until the torch pin can move to >= 2.5.
       - dependency-name: "transformers"
         update-types: ["version-update:semver-major"]
+      # torch and torchaudio must move together (torchaudio ships a C++
+      # extension compiled against a specific torch version). The whole torch
+      # stack is intentionally frozen at 2.4.x for pyannote/whisperx
+      # compatibility; a lone torchaudio bump breaks `import torchaudio`.
+      # Upgrade both deliberately, not via Dependabot.
+      - dependency-name: "torch"
+      - dependency-name: "torchaudio"
 
   # GitHub Actions used by the CI workflows.
   - package-ecosystem: "github-actions"

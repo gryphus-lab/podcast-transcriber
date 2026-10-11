@@ -5,8 +5,13 @@ description = "Podcast transcription CLI and API with speaker diarization using 
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "whisperx>=3.1.1",
+    # torch and torchaudio are a matched pair - torchaudio's compiled C++
+    # extension is built against a specific torch version. Keep both on the same
+    # minor (2.4.x); bumping torchaudio alone (e.g. to 2.11) fails at
+    # `import torchaudio` with a _torchaudio extension load error against torch
+    # 2.4. A Dependabot ignore below keeps torchaudio pinned to torch.
     "torch>=2.4.0,<2.5",
-    "torchaudio>=2.11.0,<2.12",
+    "torchaudio>=2.4.0,<2.5",
     # transformers 5.x requires torch>=2.5; cap to the 4.x line that works
     # with the torch 2.4 pin above (kept for pyannote/torchaudio compatibility).
     # Do NOT bump to 5.x: transformers 5 drops the torch<2.5 path and the
