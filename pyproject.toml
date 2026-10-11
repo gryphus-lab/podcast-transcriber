@@ -17,7 +17,7 @@ dependencies = [
     # Do NOT bump to 5.x: transformers 5 drops the torch<2.5 path and the
     # container then fails at import with "Could not import module
     # 'Wav2Vec2ForCTC'". A Dependabot ignore for the major keeps this < 5.
-    "transformers>=4.48.0,<5",
+    "transformers>=5.10.1,<6",
     "matplotlib>=3.11.2",
     "python-dotenv>=1.2.4",
     "rich>=13.7.0",
