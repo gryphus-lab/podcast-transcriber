@@ -78,6 +78,6 @@ package = true
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
     "fakeredis",
 ]
