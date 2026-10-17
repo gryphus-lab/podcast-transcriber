@@ -201,7 +201,10 @@ def _kill_pool_processes(executor: ProcessPoolExecutor) -> None:
     next job starts.
     """
     procs = getattr(executor, "_processes", None) or {}
-    for proc in list(procs.values()):
+    # Snapshot via tuple(): killing a child can trigger the pool to mutate its
+    # own _processes dict, and iterating a live view while it changes raises
+    # RuntimeError. A tuple copy is independent of that mutation.
+    for proc in tuple(procs.values()):
         try:
             if proc.is_alive():
                 proc.kill()
