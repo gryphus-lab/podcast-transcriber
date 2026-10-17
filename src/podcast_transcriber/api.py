@@ -50,6 +50,7 @@ from .utils.converter import (  # noqa: E402
     handle_conversion_request,
 )
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
+from .utils.memguard import check_memory_ceiling  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
 from .utils.uploads import save_upload_to_temp  # noqa: E402
 
@@ -69,6 +70,11 @@ app = FastAPI(
 # Job store, selected by JOB_BACKEND (memory | rq). The in-process default needs
 # no broker; set JOB_BACKEND=rq for the durable Redis-backed queue.
 _store = build_store()
+
+# Surface a too-low memory ceiling at startup (e.g. a phantom container limit
+# set higher than the Docker Desktop VM) rather than letting it manifest as an
+# opaque OOM mid-transcription. Logs a prominent warning; never fatal.
+check_memory_ceiling(model=WHISPER_MODEL, diarize=True)
 
 
 # ---------------------------------------------------------------------------

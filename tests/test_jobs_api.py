@@ -15,6 +15,11 @@ client = TestClient(api_module.app)
 def _isolate_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("JOBS_DIR", str(tmp_path / "jobs"))
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "output"))
+    # These tests patch job_backend.transcribe_audio with an in-process fake and
+    # assert on the result. Run the work in-thread (not the default spawned
+    # subprocess, which wouldn't see the monkeypatch). Subprocess isolation has
+    # its own dedicated tests in test_job_backend.py.
+    monkeypatch.setenv("ISOLATE_TRANSCRIPTION", "0")
 
 
 def _fake_transcribe(**kwargs):

@@ -183,6 +183,11 @@ def test_run_transcription_formats_and_cleans_up(tmp_path, monkeypatch):
     audio = tmp_path / "job.m4a"
     audio.write_bytes(b"audio")
 
+    # Run in-thread so the in-process fake is used; the default spawned
+    # subprocess would re-import the real transcriber. Subprocess isolation is
+    # covered by test_job_backend.py.
+    monkeypatch.setenv("ISOLATE_TRANSCRIPTION", "0")
+
     def fake_transcribe_audio(**kwargs):
         return {"segments": [{"start": 0.0, "end": 1.0, "text": "Hi", "speaker": "A"}]}
 

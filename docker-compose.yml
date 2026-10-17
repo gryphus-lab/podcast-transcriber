@@ -17,13 +17,40 @@ services:
       # provides Redis + a worker; set JOB_BACKEND=rq to use them.
       - JOB_BACKEND=${JOB_BACKEND:-memory}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      # Run each transcription in an isolated child process so an out-of-memory
+      # kill fails only that job (the API survives) instead of killing the
+      # container and losing in-memory jobs. Set to 0 to run in-thread.
+      - ISOLATE_TRANSCRIPTION=${ISOLATE_TRANSCRIPTION:-1}
+      # Cap native threads to curb per-thread allocator growth (peak RSS).
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
+      # CPU-tuned Whisper decode batch (lower = less peak memory).
+      - WHISPER_BATCH_SIZE=${WHISPER_BATCH_SIZE:-8}
+      # Hard wall-clock ceiling (seconds) for a single transcription. Guarantees
+      # a job reaches a terminal state even when a VM-wide OOM kills the worker
+      # without the parent seeing a clean BrokenProcessPool (which otherwise
+      # leaves the job stuck 'running' while the pool respawns and re-thrashes).
+      - TRANSCRIPTION_TIMEOUT=${TRANSCRIPTION_TIMEOUT:-3600}
     volumes:
       - transcriber-output:/app/output
       - transcriber-jobs:/app/jobs
     deploy:
       resources:
         limits:
-          memory: 8G
+          # IMPORTANT: this limit must be <= the Docker Desktop VM's total RAM
+          # (Settings -> Resources -> Memory). A limit LARGER than the VM is a
+          # phantom: Docker can't grant more than the VM has, so the kernel
+          # ignores it and the OOM-killer runs VM-wide and non-deterministically
+          # - which can kill the worker in a way the parent never observes,
+          # hanging the job. Keeping it at/under the VM size makes OOM
+          # cgroup-scoped, so the app fails the job cleanly instead.
+          #
+          # Diarized long audio ('large-v3' + pyannote) peaks ~7.5-12 GB, which
+          # a default 8 GiB VM cannot satisfy. For long files prefer the NATIVE
+          # 'transcribe' CLI on the host (full machine RAM, no VM ceiling - see
+          # README "Transcribing long files"); Docker is best for the API and
+          # short/medium clips. To push large files through Docker, raise BOTH
+          # the VM memory AND this limit together (e.g. 12G VM + 12G here).
+          memory: ${TRANSCRIBER_MEMORY_LIMIT:-7G}
 
   converter:
     restart: unless-stopped

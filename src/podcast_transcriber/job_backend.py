@@ -19,7 +19,10 @@ a shared directory (:func:`save_job_input`) and passed to the worker by path.
 from __future__ import annotations
 
 import logging
+import multiprocessing as mp
 import os
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from functools import partial
 from pathlib import Path
 from typing import Optional
@@ -32,6 +35,51 @@ from .utils.formatter import format_transcript, write_transcript
 from .utils.transcriber import transcribe_audio
 
 logger = logging.getLogger(__name__)
+
+
+# Run the heavy transcription (model load + inference + diarization) in a
+# short-lived child process by default, so that if the OS OOM-kills it on a
+# large file the parent API survives: the job is marked ``error`` with a clear
+# message instead of the whole container being killed and relaunched by
+# ``restart: unless-stopped`` (which, with the in-memory backend, also loses the
+# job). A spawned child additionally releases ALL of the ML stack's native
+# memory back to the OS on exit - something an in-thread run can't guarantee.
+# Set ISOLATE_TRANSCRIPTION=0 to run in-thread (e.g. for debugging/profiling).
+def _isolation_enabled() -> bool:
+    return os.environ.get("ISOLATE_TRANSCRIPTION", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+
+
+# Hard wall-clock ceiling for a single isolated transcription. A VM-wide OOM
+# (as opposed to a cgroup-scoped one) does not always surface as a clean
+# ``BrokenProcessPool``: the OS may kill the child such that the parent's
+# ``Future.result()`` neither returns nor raises, so the pool silently respawns
+# the worker and re-thrashes while the job sits in ``running`` forever. This
+# timeout guarantees a terminal outcome: if a run exceeds it, we treat it as a
+# resource failure, tear the pool down, and let the job be recorded as ``error``
+# instead of looping. 0/empty disables the ceiling.
+def _transcription_timeout() -> Optional[float]:
+    raw = os.environ.get("TRANSCRIPTION_TIMEOUT", "3600").strip()
+    try:
+        seconds = float(raw)
+    except ValueError:
+        return 3600.0
+    return seconds if seconds > 0 else None
+
+
+# Shared actionable guidance for an out-of-memory / killed worker.
+_OOM_GUIDANCE = (
+    "Transcription worker was killed or stalled - almost certainly out of "
+    "memory. Long audio with 'large-v3' + diarization can need ~10-12 GB, which "
+    "exceeds a default Docker Desktop VM. Options: run the native 'transcribe' "
+    "CLI on the host (full machine RAM, no VM ceiling - recommended for long "
+    "files), use a smaller model (e.g. 'medium'), disable diarization, shorten "
+    "the audio, or raise BOTH the container limit (TRANSCRIBER_MEMORY_LIMIT) and "
+    "the Docker Desktop VM memory (Settings -> Resources -> Memory)."
+)
 
 
 def get_backend_name() -> str:
@@ -68,24 +116,120 @@ def save_job_input(job_id: str, audio_bytes: bytes, suffix: str) -> Path:
     return path
 
 
+def _transcribe_to_text(params: dict) -> str:
+    """Pure transcription step: audio path + options -> formatted transcript.
+
+    Importable at module top level (no closures) so it can run in a spawned
+    child process. Does NOT touch the staged file or build the result dataclass;
+    the parent owns cleanup and job bookkeeping.
+    """
+    # Test seam: a spawned child re-imports this module fresh, so a monkeypatch
+    # in the parent can't reach it. This lets a test deterministically simulate
+    # the OS OOM-killer SIGKILL'ing the worker, exercising the real subprocess
+    # boundary. Never set in production params.
+    if params.get("_test_kill_worker"):  # pragma: no cover - runs in child
+        os.kill(os.getpid(), getattr(__import__("signal"), "SIGKILL"))
+    # Test seam: block the child so the parent's result(timeout=...) fires,
+    # exercising the timeout -> force-kill -> MemoryError path. Never in prod.
+    if params.get("_test_sleep_seconds"):  # pragma: no cover - runs in child
+        import time as _time
+
+        _time.sleep(float(params["_test_sleep_seconds"]))
+    return format_transcript(
+        transcribe_audio(
+            audio_path=Path(params["audio_path"]),
+            model_name=params.get("model", "large-v3"),
+            language=params.get("language", "en"),
+            diarize=params.get("diarize", True),
+            hf_token=params.get("hf_token") or HF_TOKEN,
+        ),
+        output_format=params.get("output_format", "txt"),
+    )
+
+
+def _transcribe_isolated(params: dict) -> str:
+    """Run :func:`_transcribe_to_text` in a short-lived child process.
+
+    Isolation gives two guarantees against an out-of-memory event on a large
+    file:
+
+    * The parent API process survives. If the child is SIGKILL'd by the OOM
+      killer the pool raises ``BrokenProcessPool``, which we translate into a
+      ``MemoryError`` so the job is recorded as a clean failure.
+    * The job always reaches a terminal state. A VM-wide OOM can kill the child
+      without the parent's ``Future.result()`` ever returning or raising, so the
+      pool would silently respawn and re-thrash while the job hangs on
+      ``running``. A hard :func:`_transcription_timeout` bounds the wait: on
+      expiry we forcibly kill any surviving child and raise ``MemoryError`` so
+      the run fails instead of looping forever.
+
+    ``spawn`` gives the child a fresh interpreter (no inherited torch/CUDA
+    state) and guarantees its native memory is reclaimed on exit.
+    """
+    from concurrent.futures.process import BrokenProcessPool
+
+    ctx = mp.get_context("spawn")
+    # One worker, one task: the pool exists only to sandbox a single run so a
+    # kill is observable instead of fatal to the parent.
+    executor = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
+    try:
+        future = executor.submit(_transcribe_to_text, params)
+        try:
+            return future.result(timeout=_transcription_timeout())
+        except FutureTimeout as exc:
+            logger.error(
+                "Transcription exceeded the %s s ceiling; treating as OOM/stall "
+                "and failing the job.",
+                _transcription_timeout(),
+            )
+            _kill_pool_processes(executor)
+            raise MemoryError(_OOM_GUIDANCE) from exc
+    except BrokenProcessPool as exc:
+        raise MemoryError(_OOM_GUIDANCE) from exc
+    finally:
+        # Don't wait on a possibly-dead pool; just tear it down. Any child still
+        # alive after a timeout was already killed above.
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _kill_pool_processes(executor: ProcessPoolExecutor) -> None:
+    """Force-terminate any child processes still owned by ``executor``.
+
+    After a timeout the worker may still be alive and holding memory (the whole
+    point of the timeout is that it did not die cleanly). ``shutdown`` alone
+    won't reclaim it promptly, so SIGKILL it directly to free the RAM before the
+    next job starts.
+    """
+    procs = getattr(executor, "_processes", None) or {}
+    # Snapshot via tuple(): killing a child can trigger the pool to mutate its
+    # own _processes dict, and iterating a live view while it changes raises
+    # RuntimeError. A tuple copy is independent of that mutation.
+    for proc in tuple(procs.values()):
+        try:
+            if proc.is_alive():
+                proc.kill()
+        except (ValueError, OSError):  # pragma: no cover - process already gone
+            pass
+
+
 def run_transcription(params: dict) -> TranscriptionResult:
     """Transcribe the staged audio and return the formatted transcript.
 
     ``params`` keys: job_id, audio_path, source_name, model, language, diarize,
     hf_token, output_format. Cleans up the staged input afterwards.
+
+    By default the transcription runs in an isolated child process (see
+    :func:`_isolation_enabled`) so an out-of-memory kill fails just this job
+    rather than taking down the API container.
     """
     audio_path = Path(params["audio_path"])
     output_format = params.get("output_format", "txt")
     source_name = params.get("source_name") or audio_path.name
     try:
-        result = transcribe_audio(
-            audio_path=audio_path,
-            model_name=params.get("model", "large-v3"),
-            language=params.get("language", "en"),
-            diarize=params.get("diarize", True),
-            hf_token=params.get("hf_token") or HF_TOKEN,
-        )
-        transcript = format_transcript(result, output_format=output_format)
+        if _isolation_enabled():
+            transcript = _transcribe_isolated(params)
+        else:
+            transcript = _transcribe_to_text(params)
     finally:
         # The staged upload is no longer needed once transcription is done.
         Path(audio_path).unlink(missing_ok=True)

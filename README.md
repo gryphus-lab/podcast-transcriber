@@ -233,6 +233,15 @@ Set `HF_TOKEN` in your environment (or `.env`) so the transcriber can diarize.
 The images are pinned to `linux/amd64` because some ML dependencies only ship
 wheels for that platform.
 
+> **Memory:** diarized transcription of long audio (`large-v3` + pyannote on a
+> ~45-min / 100 MB file) peaks around **7.5-12 GB** of RAM. On Docker Desktop
+> the container can never use more than the **VM** has (Settings -> Resources ->
+> Memory), so the `TRANSCRIBER_MEMORY_LIMIT` in `docker-compose.yml` must stay
+> **at or below the VM size** - a larger value is a phantom the kernel ignores,
+> and the job gets OOM-killed VM-wide. For long files, prefer the native CLI
+> (next section). To push them through Docker, raise **both** the VM memory and
+> `TRANSCRIBER_MEMORY_LIMIT` to ~12G.
+
 ## Output Formats
 
 ### Plain text (`--format txt`)
@@ -292,6 +301,36 @@ All settings can be configured via `.env` or CLI arguments (CLI takes precedence
 | `PORT`            | `8000`      | API server port                        |
 
 ## Troubleshooting
+
+### Transcribing long files (OOM: "transcriber dies and restarts")
+
+Symptom: a long file submitted to the Dockerized API has its worker killed and
+the job never finishes (or the container restarts). Cause: `large-v3` +
+diarization peaks ~7.5-12 GB, which overruns a default ~8 GiB Docker Desktop VM,
+so the OS OOM-killer terminates the run.
+
+The container now isolates each transcription in a child process and bounds it
+with `TRANSCRIPTION_TIMEOUT`, so an OOM fails just that job (recorded as
+`error`) instead of hanging or taking down the API. But it still needs the RAM
+headroom to actually **succeed**. Two ways forward:
+
+- **Run natively on the host (recommended for long files).** The CLI uses your
+  machine's full RAM with no VM ceiling - the same reason standalone WhisperX
+  works where Docker struggles:
+
+  ```bash
+  uv sync
+  uv run transcribe data/your-episode.mp3 --model large-v3 --format txt
+  # faster / lighter: --model medium  or  --no-diarize
+  ```
+
+- **Give Docker more memory.** Raise the Docker Desktop VM memory (Settings ->
+  Resources -> Memory) to ~12 GB **and** set `TRANSCRIBER_MEMORY_LIMIT=12G`
+  (both must move together - the container limit can't exceed the VM). Then
+  `docker compose up --build -d`.
+
+Lower-memory knobs that help in either mode: `--model medium`, `--no-diarize`,
+`WHISPER_BATCH_SIZE=4`, `OMP_NUM_THREADS=2`.
 
 ### `Could not load libtorchcodec`
 

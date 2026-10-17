@@ -50,7 +50,11 @@ def test_transcribe_audio_runs_whisperx_without_diarization(tmp_path, monkeypatc
         "tiny", device="cpu", compute_type="int8", language="en"
     )
     transcriber_module.whisperx.load_audio.assert_called_once_with(str(audio_path))
-    model.transcribe.assert_called_once_with(audio, batch_size=16)
+    # CPU-tuned default batch size (overridable via WHISPER_BATCH_SIZE) keeps
+    # peak memory down on long files vs. whisperx's GPU-oriented default of 16.
+    model.transcribe.assert_called_once_with(
+        audio, batch_size=transcriber_module.DEFAULT_BATCH_SIZE
+    )
     transcriber_module.whisperx.align.assert_called_once_with(
         [{"start": 0, "end": 1, "text": "Hi"}],
         "align-model",
@@ -129,7 +133,7 @@ def test_transcribe_audio_assigns_speakers_when_token_is_available(
 
     assert result == speaker_result
     pipeline_cls.from_pretrained.assert_called_once_with(
-        "pyannote/speaker-diarization-3.1", token="hf_token"
+        "pyannote/speaker-diarization-3.1", use_auth_token="hf_token"
     )
     pipeline.to.assert_called_once_with("cpu-device")
     pipeline.assert_called_once_with({"waveform": waveform, "sample_rate": 16000})
@@ -182,3 +186,81 @@ def test_transcribe_audio_raises_when_diarization_model_cannot_load(
             hf_token="hf_token",
             device="cpu",
         )
+
+
+def test_transcribe_audio_reclaims_memory_between_stages(tmp_path, monkeypatch):
+    """Models are released + memory reclaimed between the heavy stages.
+
+    Guards the OOM fix: the whisper model and the alignment model must be freed
+    before diarization runs, so the three large allocations never stack in RAM
+    simultaneously (which overran an 8 GiB Docker VM on a ~45-minute file).
+    """
+    audio_path = tmp_path / "episode.wav"
+    audio_path.write_bytes(b"audio")
+    audio = MagicMock(name="audio")
+    waveform = MagicMock(name="waveform")
+    diarization_result = SimpleNamespace(
+        itertracks=lambda yield_label: [
+            (SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00")
+        ]
+    )
+    pipeline = MagicMock()
+    pipeline.to.return_value = pipeline
+    pipeline.return_value = diarization_result
+    pipeline_cls = MagicMock()
+    pipeline_cls.from_pretrained.return_value = pipeline
+
+    model = MagicMock()
+    model.transcribe.return_value = {"segments": [{"start": 0, "end": 1, "text": "Hi"}]}
+    speaker_result = {
+        "segments": [{"start": 0, "end": 1, "text": "Hi", "speaker": "SPEAKER_00"}]
+    }
+
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_model", MagicMock(return_value=model)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx, "load_audio", MagicMock(return_value=audio)
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "load_align_model",
+        MagicMock(return_value=("align-model", {})),
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "align",
+        MagicMock(return_value={"segments": [{"start": 0, "end": 1, "text": "Hi"}]}),
+    )
+    monkeypatch.setattr(
+        transcriber_module.whisperx,
+        "assign_word_speakers",
+        MagicMock(return_value=speaker_result),
+    )
+    monkeypatch.setattr(
+        transcriber_module.torch,
+        "from_numpy",
+        MagicMock(return_value=SimpleNamespace(unsqueeze=lambda dim: waveform)),
+    )
+    monkeypatch.setattr(
+        transcriber_module.torch, "device", MagicMock(return_value="cpu-device")
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "pyannote.audio",
+        SimpleNamespace(Pipeline=pipeline_cls),
+    )
+
+    reclaim_spy = MagicMock(wraps=transcriber_module._reclaim)
+    monkeypatch.setattr(transcriber_module, "_reclaim", reclaim_spy)
+
+    result = transcriber_module.transcribe_audio(
+        audio_path,
+        diarize=True,
+        hf_token="hf_token",
+        device="cpu",
+    )
+
+    assert result == speaker_result
+    # Reclaim runs after transcription, after alignment, and after diarization.
+    assert reclaim_spy.call_count == 3
