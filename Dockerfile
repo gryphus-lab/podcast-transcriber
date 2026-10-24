@@ -1,8 +1,12 @@
-# Pull the official Python image from the AWS ECR Public mirror rather than
-# Docker Hub: anonymous Docker Hub pulls are rate-limited (HTTP 429) in CI,
-# which intermittently fails the image builds. ECR Public mirrors the same
-# official images without anonymous pull limits.
-FROM public.ecr.aws/docker/library/python:3.11-slim-trixie AS base
+# Base image is parameterized so CI can retarget it to whichever official-Python
+# mirror is reachable at build time. Anonymous pulls of the same official image
+# are rate-limited (HTTP 429 "Data limit exceeded") independently on Docker Hub
+# AND on the AWS ECR Public mirror, and GitHub's shared runners regularly trip
+# those caps. CI pre-pulls the base from the first healthy mirror (with retries)
+# and passes it here via --build-arg BASE_IMAGE=... (see .github/workflows). The
+# default keeps a plain local `docker build` working with no extra flags.
+ARG BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim-trixie
+FROM ${BASE_IMAGE} AS base
 
 # Install system dependencies in a single RUN to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
