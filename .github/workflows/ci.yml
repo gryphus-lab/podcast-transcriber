@@ -40,15 +40,55 @@ jobs:
   docker-smoke:
     name: Docker build & smoke test
     runs-on: ubuntu-latest
+    env:
+      # Overridden by the resilient pull step below once a mirror succeeds.
+      BASE_IMAGE: public.ecr.aws/docker/library/python:3.11-slim-trixie
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The official Python base image is rate-limited (HTTP 429 "Data limit
+      # exceeded") independently on Docker Hub and the AWS ECR Public mirror, and
+      # shared runners trip those caps. Pull from the first healthy mirror with
+      # retries/backoff, re-tag to a stable local ref, and pass it to every build
+      # via BASE_IMAGE so the actual `docker build` never pulls from a (possibly
+      # throttled) registry.
+      - name: Pull base image (resilient, multi-mirror)
+        run: |
+          set -u
+          TAG="3.11-slim-trixie"
+          LOCAL="python-base:ci"
+          MIRRORS="
+          public.ecr.aws/docker/library/python:${TAG}
+          docker.io/library/python:${TAG}
+          mirror.gcr.io/library/python:${TAG}
+          "
+          pulled=""
+          for ref in $MIRRORS; do
+            for attempt in 1 2 3; do
+              echo "::group::pull $ref (attempt $attempt)"
+              if docker pull "$ref"; then
+                echo "::endgroup::"
+                docker tag "$ref" "$LOCAL"
+                pulled="$ref"
+                break 2
+              fi
+              echo "::endgroup::"
+              echo "pull failed for $ref (attempt $attempt); backing off..."
+              sleep $((attempt * 10))
+            done
+          done
+          if [ -z "$pulled" ]; then
+            echo "::error::could not pull the Python base image from any mirror"; exit 1
+          fi
+          echo "Using base image $pulled (tagged $LOCAL)"
+          echo "BASE_IMAGE=$LOCAL" >> "$GITHUB_ENV"
+
       - name: Build converter image
-        run: docker build --target converter -t podcast-converter:ci .
+        run: docker build --build-arg BASE_IMAGE="$BASE_IMAGE" --target converter -t podcast-converter:ci .
 
       - name: Build transcriber image
-        run: docker build --target transcriber -t podcast-transcriber:ci .
+        run: docker build --build-arg BASE_IMAGE="$BASE_IMAGE" --target transcriber -t podcast-transcriber:ci .
 
       # The converter is lightweight (no ML models), so we can fully boot it
       # and probe /health to catch import/startup regressions.
@@ -68,8 +108,11 @@ jobs:
           fi
 
       - name: Compose health check
+        # No --pull always: the base image was already pulled + tagged locally as
+        # $BASE_IMAGE by the resilient step; compose builds against it via the
+        # BASE_IMAGE build arg. Pulling again would re-hit the throttled mirror.
         run: |
-          docker compose up -d --pull always
+          docker compose up -d --build
           trap 'docker compose down --remove-orphans' EXIT
           for service in transcriber converter; do
             ok=0

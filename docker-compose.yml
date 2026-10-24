@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: transcriber
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim-trixie}
     ports:
       - "8000:8000"
     environment:
@@ -63,6 +65,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: converter
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim-trixie}
     ports:
       - "8001:8001"
     environment:
@@ -90,6 +94,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: transcriber
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim-trixie}
     depends_on:
       redis:
         condition: service_healthy

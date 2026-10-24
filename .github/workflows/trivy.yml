@@ -28,13 +28,41 @@ jobs:
       actions: read
     name: Scan Transcriber Image
     runs-on: ubuntu-latest
+    env:
+      BASE_IMAGE: public.ecr.aws/docker/library/python:3.11-slim-trixie
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # See ci.yml: the official Python base image is rate-limited (HTTP 429) on
+      # Docker Hub and the ECR Public mirror; pull from the first healthy mirror
+      # with retries and pass it to the build via BASE_IMAGE.
+      - name: Pull base image (resilient, multi-mirror)
+        run: |
+          set -u
+          TAG="3.11-slim-trixie"
+          LOCAL="python-base:ci"
+          MIRRORS="
+          public.ecr.aws/docker/library/python:${TAG}
+          docker.io/library/python:${TAG}
+          mirror.gcr.io/library/python:${TAG}
+          "
+          pulled=""
+          for ref in $MIRRORS; do
+            for attempt in 1 2 3; do
+              echo "::group::pull $ref (attempt $attempt)"
+              if docker pull "$ref"; then
+                echo "::endgroup::"; docker tag "$ref" "$LOCAL"; pulled="$ref"; break 2
+              fi
+              echo "::endgroup::"; echo "pull failed ($ref, attempt $attempt)"; sleep $((attempt * 10))
+            done
+          done
+          if [ -z "$pulled" ]; then echo "::error::no mirror served the base image"; exit 1; fi
+          echo "BASE_IMAGE=$LOCAL" >> "$GITHUB_ENV"
+
       - name: Build transcriber image
         run: |
-          docker build --target transcriber -t gryphus-lab/podcast-transcriber:${{ github.sha }} .
+          docker build --build-arg BASE_IMAGE="$BASE_IMAGE" --target transcriber -t gryphus-lab/podcast-transcriber:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -58,13 +86,41 @@ jobs:
       actions: read
     name: Scan Converter Image
     runs-on: ubuntu-latest
+    env:
+      BASE_IMAGE: public.ecr.aws/docker/library/python:3.11-slim-trixie
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # See ci.yml: the official Python base image is rate-limited (HTTP 429) on
+      # Docker Hub and the ECR Public mirror; pull from the first healthy mirror
+      # with retries and pass it to the build via BASE_IMAGE.
+      - name: Pull base image (resilient, multi-mirror)
+        run: |
+          set -u
+          TAG="3.11-slim-trixie"
+          LOCAL="python-base:ci"
+          MIRRORS="
+          public.ecr.aws/docker/library/python:${TAG}
+          docker.io/library/python:${TAG}
+          mirror.gcr.io/library/python:${TAG}
+          "
+          pulled=""
+          for ref in $MIRRORS; do
+            for attempt in 1 2 3; do
+              echo "::group::pull $ref (attempt $attempt)"
+              if docker pull "$ref"; then
+                echo "::endgroup::"; docker tag "$ref" "$LOCAL"; pulled="$ref"; break 2
+              fi
+              echo "::endgroup::"; echo "pull failed ($ref, attempt $attempt)"; sleep $((attempt * 10))
+            done
+          done
+          if [ -z "$pulled" ]; then echo "::error::no mirror served the base image"; exit 1; fi
+          echo "BASE_IMAGE=$LOCAL" >> "$GITHUB_ENV"
+
       - name: Build converter image
         run: |
-          docker build --target converter -t gryphus-lab/podcast-converter:${{ github.sha }} .
+          docker build --build-arg BASE_IMAGE="$BASE_IMAGE" --target converter -t gryphus-lab/podcast-converter:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
