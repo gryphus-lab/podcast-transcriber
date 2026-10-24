@@ -21,7 +21,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "python-dotenv>=1.2.4",
     "rich>=13.7.0",
-    "fastapi>=0.143.0",
+    "fastapi>=0.156.8",
     "uvicorn[standard]>=0.54.0",
     "python-multipart>=0.0.9",
     # Used at runtime for webhook callback delivery (job_backend / jobs_rq).
@@ -42,7 +42,7 @@ transcribe = "podcast_transcriber.__main__:main"
 transcribe-api = "podcast_transcriber.api:start"
 
 [build-system]
-requires = ["setuptools>=84.1.0", "wheel"]
+requires = ["setuptools>=84.2.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -78,6 +78,6 @@ package = true
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
     "fakeredis",
 ]
