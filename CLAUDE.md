@@ -44,7 +44,7 @@ Linear pipeline in `__main__.py:main()`:
 ## Conventions & gotchas
 
 - **Python 3.11 only.** WhisperX has known issues with Python 3.13 (torchcodec/PyTorch compatibility). The `mise.toml` and `pyproject.toml` enforce this.
-- `HF_TOKEN` is required for diarization. Without it, use `--no-diarize`. The token must have `read` access and the user must accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1.
+- `HF_TOKEN` is required for diarization. Without it, use `--no-diarize`. The token must have `read` access and the user must accept terms at <https://huggingface.co/pyannote/speaker-diarization-3.1>.
 - First run downloads models (~3GB for large-v3). Subsequent runs use the cache.
 - Speaker labels are generic (`SPEAKER_00`, `SPEAKER_01`) - they don't identify who is who by name.
 - The tool runs on CPU by default (Apple Silicon MPS not yet fully supported by WhisperX).
