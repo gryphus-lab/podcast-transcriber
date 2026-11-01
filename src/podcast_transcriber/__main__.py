@@ -11,6 +11,7 @@ from pathlib import Path  # noqa: E402
 
 from rich.console import Console  # noqa: E402
 
+from . import __version__  # noqa: E402
 from .config import HF_TOKEN, LANGUAGE, OUTPUT_DIR, SUPPORTED_FORMATS, WHISPER_MODEL  # noqa: E402
 from .utils.formatter import format_transcript, write_transcript  # noqa: E402
 from .utils.transcriber import transcribe_audio  # noqa: E402
@@ -23,6 +24,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="transcribe",
         description="Transcribe podcast audio with speaker diarization.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Print the version and exit.",
     )
     parser.add_argument(
         "audio_file",

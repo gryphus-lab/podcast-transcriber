@@ -28,6 +28,7 @@ from fastapi import (  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
+from . import __version__  # noqa: E402
 from .config import (  # noqa: E402
     HF_TOKEN,
     LANGUAGE,
@@ -64,7 +65,7 @@ app = FastAPI(
         "Transcriptions can run synchronously (/transcribe) or as async jobs "
         "(POST /jobs, then poll GET /jobs/{job_id} or use a callback webhook)."
     ),
-    version="0.2.0",
+    version=__version__,
 )
 
 # Job store, selected by JOB_BACKEND (memory | rq). The in-process default needs
