@@ -30,6 +30,10 @@ jobs:
       - name: Install dependencies
         run: mise run bootstrap
 
+      - name: Ensure pull requests bump the version
+        if: github.event_name == 'pull_request'
+        run: uv run python scripts/check_version.py --base-ref "${{ github.event.pull_request.base.sha }}"
+
       - name: Run linter
         run: mise run lint
 

@@ -15,6 +15,7 @@ fails the build if they drift.
 | `src/podcast_transcriber/__init__.py` | `__version__`     | single source of truth — read back by both FastAPI apps and the CLI |
 | `pyproject.toml`                      | `project.version` | the `podcast-transcriber` distribution                              |
 | `pyproject.converter.toml`            | `project.version` | the `podcast-converter` distribution                                |
+| `uv.lock`                             | editable package  | locked project version                                              |
 
 Because the apps read `__version__`, a running service self-identifies: both
 FastAPI apps report the version in their OpenAPI schema / `/docs`, and the CLI
@@ -57,10 +58,20 @@ The two MINOR features, in merge order:
 | #22 | Async transcription jobs + web console (RQ/Redis) | 0.3.0   |
 
 After #22, 24 further patch-level PRs were merged, landing the patch component
-at **24**.
+at **24**. This branch adds the next patch bump for its versioning changes.
 
-**Current version: `0.3.24`.**
+**Current version: `0.3.25`.**
 
 > Note: this also reconciled pre-existing drift — the transcriber API had been
 > hardcoded to `0.2.0` and the converter service to `0.1.0`. Both now read
 > `__version__`, so they can't fall out of sync again.
+
+## Bumping and enforcing versions
+
+Use `mise run version-patch`, `mise run version-minor`, or
+`mise run version-major` to increment every version surface together.
+
+Install the local pre-push check with `mise run install-hooks`. It rejects
+branch pushes unless the version is greater than `origin/main`. Pull request CI
+performs the same check against the PR's actual base commit, so the requirement
+still applies when a contributor has not installed local hooks.
