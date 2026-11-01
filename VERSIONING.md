@@ -10,11 +10,11 @@ fails the build if they drift.
 
 ## Version surfaces
 
-| File | Field | Purpose |
-|------|-------|---------|
-| `src/podcast_transcriber/__init__.py` | `__version__` | single source of truth — read back by both FastAPI apps and the CLI |
-| `pyproject.toml` | `project.version` | the `podcast-transcriber` distribution |
-| `pyproject.converter.toml` | `project.version` | the `podcast-converter` distribution |
+| File                                  | Field             | Purpose                                                             |
+| ------------------------------------- | ----------------- | ------------------------------------------------------------------- |
+| `src/podcast_transcriber/__init__.py` | `__version__`     | single source of truth — read back by both FastAPI apps and the CLI |
+| `pyproject.toml`                      | `project.version` | the `podcast-transcriber` distribution                              |
+| `pyproject.converter.toml`            | `project.version` | the `podcast-converter` distribution                                |
 
 Because the apps read `__version__`, a running service self-identifies: both
 FastAPI apps report the version in their OpenAPI schema / `/docs`, and the CLI
@@ -25,11 +25,11 @@ answers `transcribe --version`.
 Bump the version on every change merged to `main`, by the highest-impact change
 in the PR:
 
-| Change | Bump | Example |
-|--------|------|---------|
-| Breaking — removed/renamed API route or CLI flag, response-shape break | **MAJOR** once 1.0; while pre-1.0, a **MINOR** | `feat!:` / `BREAKING CHANGE:` |
-| New backward-compatible capability | **MINOR** | REST API, async jobs + web console |
-| Bug fix, build/CI/Docker/config, refactor, chore, docs | **PATCH** | `fix:`, Sonar fixes, CI resilience |
+| Change                                                                 | Bump                                           | Example                            |
+| ---------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| Breaking — removed/renamed API route or CLI flag, response-shape break | **MAJOR** once 1.0; while pre-1.0, a **MINOR** | `feat!:` / `BREAKING CHANGE:`      |
+| New backward-compatible capability                                     | **MINOR**                                      | REST API, async jobs + web console |
+| Bug fix, build/CI/Docker/config, refactor, chore, docs                 | **PATCH**                                      | `fix:`, Sonar fixes, CI resilience |
 
 ### Dependabot updates
 
@@ -51,10 +51,10 @@ are **PATCH**.
 
 The two MINOR features, in merge order:
 
-| PR | Feature | Version |
-|----|---------|---------|
-| #4 | REST API + Docker support | 0.2.0 |
-| #22 | Async transcription jobs + web console (RQ/Redis) | 0.3.0 |
+| PR  | Feature                                           | Version |
+| --- | ------------------------------------------------- | ------- |
+| #4  | REST API + Docker support                         | 0.2.0   |
+| #22 | Async transcription jobs + web console (RQ/Redis) | 0.3.0   |
 
 After #22, 24 further patch-level PRs were merged, landing the patch component
 at **24**.
