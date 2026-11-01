@@ -1,6 +1,6 @@
 [project]
 name = "podcast-converter"
-version = "0.3.26"
+version = "0.3.27"
 description = "Audio format converter service"
 requires-python = ">=3.11,<3.13"
 dependencies = [
