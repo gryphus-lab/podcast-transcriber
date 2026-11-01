@@ -5,13 +5,14 @@ from typing import Annotated
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 
+from . import __version__
 from .config import MAX_UPLOAD_SIZE, OUTPUT_DIR
 from .utils.converter import SUPPORTED_OUTPUT_FORMATS, handle_conversion_request
 
 app = FastAPI(
     title="Audio Converter API",
     description="Convert audio files between formats using FFmpeg.",
-    version="0.1.0",
+    version=__version__,
 )
 
 
