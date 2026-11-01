@@ -7,6 +7,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         refs/heads/*)
             has_branch=1
             ;;
+        *)
+            :
+            ;;
     esac
 done
 

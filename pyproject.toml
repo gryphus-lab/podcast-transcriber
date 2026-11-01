@@ -1,6 +1,6 @@
 [project]
 name = "podcast-transcriber"
-version = "0.3.25"
+version = "0.3.26"
 description = "Podcast transcription CLI and API with speaker diarization using WhisperX"
 requires-python = ">=3.11,<3.13"
 dependencies = [
