@@ -11,7 +11,8 @@ audio/video conversion. Available as a **CLI**, a **FastAPI service**, and
 - Speaker diarization - identifies and labels different speakers
 - Multiple output formats: plain text, SRT subtitles, JSON
 - Audio/video conversion via FFmpeg (mp4, mp3, wav, flac, ogg, mkv, webm, aac)
-- Supports `.m4a`, `.mp3`, `.wav`, `.flac`, `.ogg`, `.wma`, `.aac`
+- Supports `.aac`, `.aiff`, `.alac`, `.flac`, `.m4a`, `.mp3`, `.mp4`, `.oga`,
+  `.ogg`, `.opus`, `.wav`, `.wma`
 - Configurable model size (tiny to large-v3)
 - Three interfaces: CLI, REST API (FastAPI + Uvicorn), and Docker
 - Apple Silicon compatible (CPU mode)
