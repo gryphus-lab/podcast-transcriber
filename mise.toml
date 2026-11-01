@@ -57,12 +57,25 @@ description = "Update dependencies"
 run = "uv sync --upgrade"
 
 [tasks.version-check]
-description = "Fail if the semantic version drifts across pyproject files and __init__.py"
+description = "Fail if the semantic version drifts across project files"
 run = "uv run python scripts/check_version.py"
+
+[tasks.version-patch]
+description = "Increase the patch version"
+run = "uv run python scripts/bump_version.py patch"
+
+[tasks.version-minor]
+description = "Increase the minor version"
+run = "uv run python scripts/bump_version.py minor"
+
+[tasks.version-major]
+description = "Increase the major version"
+run = "uv run python scripts/bump_version.py major"
+
+[tasks.install-hooks]
+description = "Configure Git to use the repository hooks"
+run = "git config core.hooksPath .githooks"
 
 [tasks.test]
 description = "Run tests"
-run = [
-  "uv run python scripts/check_version.py",
-  "uv run pytest",
-]
+run = ["uv run python scripts/check_version.py", "uv run pytest"]
