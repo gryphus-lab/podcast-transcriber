@@ -4,5 +4,5 @@
 # pyproject.toml and pyproject.converter.toml (scripts/check_version.py); read
 # back by the FastAPI apps and the CLI so every artifact self-identifies.
 # See VERSIONING.md.
-__version__ = "0.3.28"
+__version__ = "0.3.29"
 __author__ = "Abhay Singh"
