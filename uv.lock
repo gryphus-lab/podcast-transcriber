@@ -1389,7 +1389,7 @@ wheels = [
 
 [[package]]
 name = "podcast-transcriber"
-version = "0.3.36"
+version = "0.3.37"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
