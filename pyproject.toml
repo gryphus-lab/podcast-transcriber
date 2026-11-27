@@ -34,7 +34,7 @@ dependencies = [
 # extra only to run with JOB_BACKEND=rq or to run an `rq worker`.
 rq = [
     "rq>=3.0.0",
-    "redis>=5.0.0",
+    "redis>=8.2.0",
 ]
 
 [project.scripts]
@@ -78,6 +78,6 @@ package = true
 dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.17.5",
+    "ruff>=0.17.6",
     "fakeredis",
 ]
